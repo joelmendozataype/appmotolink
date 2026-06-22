@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from core.authentication import SESSION_KEY
-from users.infrastructure.models import Mototaxista, Usuario
+from users.infrastructure.models import Mototaxista, RolUsuario, Usuario
 from users.infrastructure.serializers import (
     LoginSerializer,
     MototaxistaSerializer,
@@ -49,6 +49,11 @@ class UsuarioViewSet(ModelViewSet):
     @action(detail=False, methods=['get'])
     def me(self, request):
         return Response(UsuarioSerializer(request.user).data)
+
+    @action(detail=False, methods=['get'])
+    def pasajeros(self, request):
+        pasajeros = Usuario.objects.filter(rol=RolUsuario.PASAJERO)
+        return Response(UsuarioSerializer(pasajeros, many=True).data)
 
 
 class MototaxistaViewSet(ModelViewSet):
