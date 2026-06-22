@@ -4,13 +4,13 @@ import socketio
 
 logger = logging.getLogger('motolink.realtime')
 
-# 'threading' funciona tanto con manage.py runserver (long-polling) como
-# bajo eventlet ya parcheado (run_realtime.py): eventlet.monkey_patch()
-# vuelve verdes los hilos de Python, así que 'threading' obtiene
-# WebSockets reales en ese caso sin tener que detectarlo automáticamente.
-sio = socketio.Server(
-    cors_allowed_origins='*', logger=False, engineio_logger=False, async_mode='threading',
-)
+# Sin async_mode explícito: python-socketio autodetecta el modo correcto.
+# Bajo manage.py runserver usa 'threading' (long-polling); bajo run_realtime.py
+# (que llama eventlet.monkey_patch() antes de importar este módulo) detecta
+# eventlet ya cargado y usa 'eventlet', que sabe hacer el upgrade real de
+# WebSocket vía el hijacking de sockets de eventlet. Forzar 'threading' rompe
+# ese upgrade bajo eventlet (AssertionError: write() before start_response()).
+sio = socketio.Server(cors_allowed_origins='*', logger=False, engineio_logger=False)
 
 
 @sio.event

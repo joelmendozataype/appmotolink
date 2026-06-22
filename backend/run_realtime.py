@@ -9,6 +9,7 @@ envuelve el servidor Socket.IO.
 """
 
 import eventlet
+import eventlet.wsgi
 
 eventlet.monkey_patch()
 

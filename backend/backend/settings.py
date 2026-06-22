@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-je#g)z+y^f8m86+#bcgiqx(xwj(3%aud@xhk6x4cckj1j97tg)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '10.0.2.2']
 
 
 # Application definition
@@ -56,6 +56,11 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
+    # Por defecto DRF serializa DecimalField como string (ej. "9.00") para
+    # no perder precisión. El cliente Dart espera num en tarifas (tarifa_propuesta,
+    # tarifa_final, tarifa de Oferta); con el valor por defecto el cast
+    # `as num` fallaba en runtime y dejaba pantallas cargando indefinidamente.
+    'COERCE_DECIMAL_TO_STRING': False,
 }
 
 MIDDLEWARE = [
