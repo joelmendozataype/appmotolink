@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/realtime/socket_events.dart';
 import 'package:mobile/core/realtime/socket_service.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/negotiation/domain/entities/oferta_entity.dart';
+import 'package:mobile/shared/widgets/error_retry_view.dart';
 
 class OfertasRecibidasPage extends StatefulWidget {
   final String solicitudId;
@@ -18,6 +20,7 @@ class OfertasRecibidasPage extends StatefulWidget {
 class _OfertasRecibidasPageState extends State<OfertasRecibidasPage> {
   List<Oferta> _ofertas = [];
   bool _cargando = true;
+  String? _error;
 
   @override
   void initState() {
@@ -39,12 +42,24 @@ class _OfertasRecibidasPageState extends State<OfertasRecibidasPage> {
   }
 
   Future<void> _cargarOfertas() async {
-    final ofertas = await ServiceLocator.obtenerOfertas(widget.solicitudId);
-    if (!mounted) return;
     setState(() {
-      _ofertas = ofertas;
-      _cargando = false;
+      _cargando = true;
+      _error = null;
     });
+    try {
+      final ofertas = await ServiceLocator.obtenerOfertas(widget.solicitudId);
+      if (!mounted) return;
+      setState(() {
+        _ofertas = ofertas;
+        _cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = mensajeDeError(e);
+        _cargando = false;
+      });
+    }
   }
 
   void _onNuevaOferta(dynamic data) {
@@ -73,7 +88,9 @@ class _OfertasRecibidasPageState extends State<OfertasRecibidasPage> {
           ),
         ],
       ),
-      body: _cargando
+      body: _error != null
+          ? ErrorRetryView(mensaje: _error!, onRetry: _cargarOfertas)
+          : _cargando
           ? const Center(child: CircularProgressIndicator())
           : _ofertas.isEmpty
               ? const Center(child: Text('Esperando ofertas de mototaxistas...'))

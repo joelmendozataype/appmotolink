@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/realtime/socket_events.dart';
 import 'package:mobile/core/realtime/socket_service.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/trip_request/domain/entities/solicitud_viaje_entity.dart';
+import 'package:mobile/shared/widgets/error_retry_view.dart';
 
 class SolicitudesDisponiblesPage extends StatefulWidget {
   const SolicitudesDisponiblesPage({super.key});
@@ -18,6 +20,7 @@ class _SolicitudesDisponiblesPageState
     extends State<SolicitudesDisponiblesPage> {
   List<SolicitudViaje> _disponibles = [];
   bool _cargando = true;
+  String? _error;
 
   @override
   void initState() {
@@ -36,12 +39,24 @@ class _SolicitudesDisponiblesPageState
   }
 
   Future<void> _cargarSolicitudes() async {
-    final disponibles = await ServiceLocator.obtenerSolicitudesDisponibles();
-    if (!mounted) return;
     setState(() {
-      _disponibles = disponibles;
-      _cargando = false;
+      _cargando = true;
+      _error = null;
     });
+    try {
+      final disponibles = await ServiceLocator.obtenerSolicitudesDisponibles();
+      if (!mounted) return;
+      setState(() {
+        _disponibles = disponibles;
+        _cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = mensajeDeError(e);
+        _cargando = false;
+      });
+    }
   }
 
   void _onSolicitudCreada(dynamic data) {
@@ -70,7 +85,9 @@ class _SolicitudesDisponiblesPageState
           ),
         ],
       ),
-      body: _cargando
+      body: _error != null
+          ? ErrorRetryView(mensaje: _error!, onRetry: _cargarSolicitudes)
+          : _cargando
           ? const Center(child: CircularProgressIndicator())
           : _disponibles.isEmpty
               ? const Center(child: Text('No hay solicitudes disponibles ahora'))

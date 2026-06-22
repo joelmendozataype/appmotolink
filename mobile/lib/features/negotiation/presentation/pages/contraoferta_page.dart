@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/trip_request/domain/entities/solicitud_viaje_entity.dart';
+import 'package:mobile/shared/widgets/error_retry_view.dart';
 import 'package:provider/provider.dart';
 
 /// El conductor responde a una solicitud: aceptar la tarifa propuesta,
@@ -24,6 +26,7 @@ class _ContraofertaPageState extends State<ContraofertaPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _tarifaController;
   SolicitudViaje? _solicitud;
+  String? _errorCarga;
   bool _enviando = false;
 
   @override
@@ -34,13 +37,20 @@ class _ContraofertaPageState extends State<ContraofertaPage> {
   }
 
   Future<void> _cargarSolicitud() async {
-    final disponibles = await ServiceLocator.obtenerSolicitudesDisponibles();
-    final solicitud = disponibles.firstWhere((s) => s.id == widget.solicitudId);
-    if (!mounted) return;
-    setState(() {
-      _solicitud = solicitud;
-      _tarifaController.text = solicitud.tarifaPropuesta.toStringAsFixed(2);
-    });
+    setState(() => _errorCarga = null);
+    try {
+      final disponibles = await ServiceLocator.obtenerSolicitudesDisponibles();
+      final solicitud =
+          disponibles.firstWhere((s) => s.id == widget.solicitudId);
+      if (!mounted) return;
+      setState(() {
+        _solicitud = solicitud;
+        _tarifaController.text = solicitud.tarifaPropuesta.toStringAsFixed(2);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorCarga = mensajeDeError(e));
+    }
   }
 
   String get _conductorId => context.read<AuthProvider>().usuarioActual!.id;
@@ -56,6 +66,11 @@ class _ContraofertaPageState extends State<ContraofertaPage> {
         ),
       );
       context.go(AppRoutes.inicioMototaxista);
+    } on ServerException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(mensajeDeError(e))),
+      );
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
@@ -86,7 +101,9 @@ class _ContraofertaPageState extends State<ContraofertaPage> {
     final solicitud = _solicitud;
     return Scaffold(
       appBar: AppBar(title: const Text('Responder solicitud')),
-      body: solicitud == null
+      body: _errorCarga != null
+          ? ErrorRetryView(mensaje: _errorCarga!, onRetry: _cargarSolicitud)
+          : solicitud == null
           ? const Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.all(24),

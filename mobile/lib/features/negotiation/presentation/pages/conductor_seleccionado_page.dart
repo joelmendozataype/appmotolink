@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/negotiation/domain/entities/oferta_entity.dart';
 
@@ -24,6 +25,10 @@ class _ConductorSeleccionadoPageState
       final viaje = await ServiceLocator.seleccionarOferta(widget.oferta.id);
       if (!mounted) return;
       context.pushReplacement(AppRoutes.viajeEnCursoPath(viaje.id));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
     } finally {
       if (mounted) setState(() => _cargando = false);
     }

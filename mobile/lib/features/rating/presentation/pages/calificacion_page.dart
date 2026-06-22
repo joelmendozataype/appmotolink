@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 
 class CalificacionPage extends StatefulWidget {
@@ -27,6 +28,10 @@ class _CalificacionPageState extends State<CalificacionPage> {
       );
       if (!mounted) return;
       context.go(AppRoutes.inicioPasajero);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
     } finally {
       if (mounted) setState(() => _enviando = false);
     }

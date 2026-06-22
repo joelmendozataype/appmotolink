@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/enums/rol_usuario.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/features/auth/domain/entities/usuario_entity.dart';
+import 'package:mobile/shared/widgets/error_retry_view.dart';
 
 class GestionUsuariosPage extends StatefulWidget {
   const GestionUsuariosPage({super.key});
@@ -13,6 +15,7 @@ class GestionUsuariosPage extends StatefulWidget {
 class _GestionUsuariosPageState extends State<GestionUsuariosPage> {
   List<Usuario> _usuarios = [];
   bool _cargando = true;
+  String? _error;
 
   @override
   void initState() {
@@ -21,12 +24,24 @@ class _GestionUsuariosPageState extends State<GestionUsuariosPage> {
   }
 
   Future<void> _cargarUsuarios() async {
-    final usuarios = await ServiceLocator.listarUsuarios();
-    if (!mounted) return;
     setState(() {
-      _usuarios = usuarios;
-      _cargando = false;
+      _cargando = true;
+      _error = null;
     });
+    try {
+      final usuarios = await ServiceLocator.listarUsuarios();
+      if (!mounted) return;
+      setState(() {
+        _usuarios = usuarios;
+        _cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = mensajeDeError(e);
+        _cargando = false;
+      });
+    }
   }
 
   String _etiquetaRol(RolUsuario rol) {
@@ -41,15 +56,23 @@ class _GestionUsuariosPageState extends State<GestionUsuariosPage> {
   }
 
   Future<void> _eliminar(String usuarioId) async {
-    await ServiceLocator.eliminarUsuario(usuarioId);
-    _cargarUsuarios();
+    try {
+      await ServiceLocator.eliminarUsuario(usuarioId);
+      _cargarUsuarios();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Gestión de usuarios')),
-      body: _cargando
+      body: _error != null
+          ? ErrorRetryView(mensaje: _error!, onRetry: _cargarUsuarios)
+          : _cargando
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
               padding: const EdgeInsets.all(16),

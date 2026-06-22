@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/shared/widgets/error_retry_view.dart';
 import 'package:provider/provider.dart';
 
 class DashboardAdminPage extends StatefulWidget {
@@ -18,6 +20,7 @@ class _DashboardAdminPageState extends State<DashboardAdminPage> {
   int _viajes = 0;
   int _usuarios = 0;
   bool _cargando = true;
+  String? _error;
 
   @override
   void initState() {
@@ -26,18 +29,30 @@ class _DashboardAdminPageState extends State<DashboardAdminPage> {
   }
 
   Future<void> _cargarConteos() async {
-    final pasajeros = await ServiceLocator.listarPasajeros();
-    final mototaxistas = await ServiceLocator.listarMototaxistas();
-    final viajes = await ServiceLocator.listarViajes();
-    final usuarios = await ServiceLocator.listarUsuarios();
-    if (!mounted) return;
     setState(() {
-      _pasajeros = pasajeros.length;
-      _mototaxistas = mototaxistas.length;
-      _viajes = viajes.length;
-      _usuarios = usuarios.length;
-      _cargando = false;
+      _cargando = true;
+      _error = null;
     });
+    try {
+      final pasajeros = await ServiceLocator.listarPasajeros();
+      final mototaxistas = await ServiceLocator.listarMototaxistas();
+      final viajes = await ServiceLocator.listarViajes();
+      final usuarios = await ServiceLocator.listarUsuarios();
+      if (!mounted) return;
+      setState(() {
+        _pasajeros = pasajeros.length;
+        _mototaxistas = mototaxistas.length;
+        _viajes = viajes.length;
+        _usuarios = usuarios.length;
+        _cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = mensajeDeError(e);
+        _cargando = false;
+      });
+    }
   }
 
   Future<void> _cerrarSesion() async {
@@ -58,7 +73,9 @@ class _DashboardAdminPageState extends State<DashboardAdminPage> {
           ),
         ],
       ),
-      body: _cargando
+      body: _error != null
+          ? ErrorRetryView(mensaje: _error!, onRetry: _cargarConteos)
+          : _cargando
           ? const Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.all(16),

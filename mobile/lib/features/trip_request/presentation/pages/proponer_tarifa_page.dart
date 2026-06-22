@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/enums/estado_solicitud.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/trip_request/domain/entities/solicitud_viaje_entity.dart';
@@ -45,6 +46,10 @@ class _ProponerTarifaPageState extends State<ProponerTarifaPage> {
       );
       if (!mounted) return;
       context.pushReplacement(AppRoutes.ofertasRecibidasPath(solicitud.id));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
     } finally {
       if (mounted) setState(() => _cargando = false);
     }

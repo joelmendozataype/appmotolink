@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/enums/estado_viaje.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/trip_tracking/domain/entities/viaje_entity.dart';
+import 'package:mobile/shared/widgets/error_retry_view.dart';
 import 'package:provider/provider.dart';
 
 class HistorialPasajeroPage extends StatefulWidget {
@@ -15,6 +17,7 @@ class HistorialPasajeroPage extends StatefulWidget {
 class _HistorialPasajeroPageState extends State<HistorialPasajeroPage> {
   List<Viaje> _viajes = [];
   bool _cargando = true;
+  String? _error;
 
   @override
   void initState() {
@@ -28,12 +31,24 @@ class _HistorialPasajeroPageState extends State<HistorialPasajeroPage> {
       setState(() => _cargando = false);
       return;
     }
-    final historial = await ServiceLocator.obtenerHistorial(usuario.id);
-    if (!mounted) return;
     setState(() {
-      _viajes = historial.viajes;
-      _cargando = false;
+      _cargando = true;
+      _error = null;
     });
+    try {
+      final historial = await ServiceLocator.obtenerHistorial(usuario.id);
+      if (!mounted) return;
+      setState(() {
+        _viajes = historial.viajes;
+        _cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = mensajeDeError(e);
+        _cargando = false;
+      });
+    }
   }
 
   String _etiquetaEstado(EstadoViaje estado) {
@@ -53,7 +68,9 @@ class _HistorialPasajeroPageState extends State<HistorialPasajeroPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Historial de viajes')),
-      body: _cargando
+      body: _error != null
+          ? ErrorRetryView(mensaje: _error!, onRetry: _cargarHistorial)
+          : _cargando
           ? const Center(child: CircularProgressIndicator())
           : _viajes.isEmpty
               ? const Center(child: Text('Aún no tienes viajes registrados'))

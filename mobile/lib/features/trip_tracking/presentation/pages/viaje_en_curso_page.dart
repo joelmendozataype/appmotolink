@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/trip_tracking/domain/entities/viaje_entity.dart';
+import 'package:mobile/shared/widgets/error_retry_view.dart';
 
 class ViajeEnCursoPage extends StatefulWidget {
   final String viajeId;
@@ -15,6 +17,7 @@ class ViajeEnCursoPage extends StatefulWidget {
 
 class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
   Viaje? _viaje;
+  String? _error;
   bool _finalizando = false;
 
   @override
@@ -24,9 +27,15 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
   }
 
   Future<void> _cargarViaje() async {
-    final viaje = await ServiceLocator.obtenerViajePorId(widget.viajeId);
-    if (!mounted) return;
-    setState(() => _viaje = viaje);
+    setState(() => _error = null);
+    try {
+      final viaje = await ServiceLocator.obtenerViajePorId(widget.viajeId);
+      if (!mounted) return;
+      setState(() => _viaje = viaje);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = mensajeDeError(e));
+    }
   }
 
   Future<void> _finalizarViaje() async {
@@ -35,6 +44,10 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
       await ServiceLocator.finalizarViaje(widget.viajeId);
       if (!mounted) return;
       context.pushReplacement(AppRoutes.calificacionPath(widget.viajeId));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
     } finally {
       if (mounted) setState(() => _finalizando = false);
     }
@@ -45,7 +58,9 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
     final viaje = _viaje;
     return Scaffold(
       appBar: AppBar(title: const Text('Viaje en curso')),
-      body: viaje == null
+      body: _error != null
+          ? ErrorRetryView(mensaje: _error!, onRetry: _cargarViaje)
+          : viaje == null
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/core/di/service_locator.dart';
+import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/features/profile/domain/entities/mototaxista_entity.dart';
+import 'package:mobile/shared/widgets/error_retry_view.dart';
 
 class ListaConductoresPage extends StatefulWidget {
   const ListaConductoresPage({super.key});
@@ -12,6 +14,7 @@ class ListaConductoresPage extends StatefulWidget {
 class _ListaConductoresPageState extends State<ListaConductoresPage> {
   List<Mototaxista> _conductores = [];
   bool _cargando = true;
+  String? _error;
 
   @override
   void initState() {
@@ -20,19 +23,33 @@ class _ListaConductoresPageState extends State<ListaConductoresPage> {
   }
 
   Future<void> _cargar() async {
-    final conductores = await ServiceLocator.listarMototaxistas();
-    if (!mounted) return;
     setState(() {
-      _conductores = conductores;
-      _cargando = false;
+      _cargando = true;
+      _error = null;
     });
+    try {
+      final conductores = await ServiceLocator.listarMototaxistas();
+      if (!mounted) return;
+      setState(() {
+        _conductores = conductores;
+        _cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = mensajeDeError(e);
+        _cargando = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Lista de Conductores')),
-      body: _cargando
+      body: _error != null
+          ? ErrorRetryView(mensaje: _error!, onRetry: _cargar)
+          : _cargando
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
               padding: const EdgeInsets.all(16),
