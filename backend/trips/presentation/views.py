@@ -1,3 +1,4 @@
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.decorators import action
@@ -62,6 +63,11 @@ class SolicitudViajeViewSet(ModelViewSet):
             oferta = NegotiationService().aceptar(
                 solicitud_id=pk, conductor=self._conductor_de(request),
             )
+        except ObjectDoesNotExist:
+            return Response(
+                {'detail': 'Solicitud o conductor no encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         except SolicitudNoDisponibleError:
             return Response(
                 {'detail': 'La solicitud ya no está disponible'},
@@ -82,6 +88,11 @@ class SolicitudViajeViewSet(ModelViewSet):
             oferta = NegotiationService().contraofertar(
                 solicitud_id=pk, conductor=self._conductor_de(request), tarifa=tarifa,
             )
+        except ObjectDoesNotExist:
+            return Response(
+                {'detail': 'Solicitud o conductor no encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         except SolicitudNoDisponibleError:
             return Response(
                 {'detail': 'La solicitud ya no está disponible'},
@@ -100,6 +111,11 @@ class SolicitudViajeViewSet(ModelViewSet):
         try:
             oferta = NegotiationService().rechazar(
                 solicitud_id=pk, conductor=self._conductor_de(request),
+            )
+        except ObjectDoesNotExist:
+            return Response(
+                {'detail': 'Solicitud o conductor no encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
             )
         except SolicitudNoDisponibleError:
             return Response(

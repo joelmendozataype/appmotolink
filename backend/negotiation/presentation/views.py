@@ -1,3 +1,4 @@
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -27,6 +28,10 @@ class OfertaViewSet(ModelViewSet):
         """6-7. El pasajero selecciona esta oferta: el viaje queda asignado."""
         try:
             viaje = NegotiationService().seleccionar_conductor(oferta_id=pk)
+        except ObjectDoesNotExist:
+            return Response(
+                {'detail': 'La oferta no existe'}, status=status.HTTP_404_NOT_FOUND,
+            )
         except OfertaNoDisponibleError:
             return Response(
                 {'detail': 'Esta oferta ya no está disponible'},
