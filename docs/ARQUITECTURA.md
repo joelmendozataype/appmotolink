@@ -1,302 +1,188 @@
-# MOTOLINK — Arquitectura Inicial
+# MOTOLINK — Arquitectura
 
-Proyecto académico tipo InDrive para mototaxis, basado en **negociación de tarifas** entre pasajero y conductor.
+Proyecto académico tipo InDrive para mototaxis, basado en **negociación de
+tarifas** entre pasajero y conductor.
 
-Esta etapa define únicamente la **estructura del proyecto** (Clean Architecture). No hay lógica funcional implementada todavía.
+Este documento describe la arquitectura **tal como está implementada**, no
+un plan. El proyecto es funcional de extremo a extremo: la app móvil
+consume el backend real (sin datos mock) mediante
+`core/di/service_locator.dart`, la negociación viaja por REST + Socket.IO,
+login/calificación persisten contra la base de datos, y GPS (`geolocator`)
+y gestión de estado (`Provider`) están integrados. Ver
+[VERIFICACION_EJECUCION.md](VERIFICACION_EJECUCION.md) para el detalle de
+lo verificado en ejecución contra el emulador, y
+`python manage.py test` / `flutter test` para las pruebas automatizadas.
 
 ---
 
-## 1. Visión general del stack
+## 1. Stack
 
 | Capa | Tecnología |
 |---|---|
-| Frontend | Flutter + Dart |
-| Backend | Django (API REST con DRF) |
+| Frontend | Flutter / Dart, `go_router`, `provider`, `socket_io_client`, `geolocator` |
+| Backend | Django 5 + DRF, autenticación por sesión (no JWT), `python-socketio` sobre eventlet (WebSocket real) |
 | Base de datos | SQLite |
-| Arquitectura | Clean Architecture (Presentation / Domain / Data) |
-| IA de apoyo | Cursor, Claude, Antigravity |
-
-El repositorio tiene dos sub-proyectos independientes que se comunican por HTTP/REST:
+| Arquitectura | Clean Architecture (domain / data / presentation) en ambos lados |
 
 ```
 MOTOLINK/
-├── frontend/motolink_app/   → App Flutter (cliente)
-└── backend/motolink_backend/ → API Django (servidor)
+├── backend/   # API REST + Socket.IO (Django)
+├── mobile/    # App Flutter
+└── docs/      # Esta documentación
 ```
 
 ---
 
-## 2. Clean Architecture en el Frontend (Flutter)
-
-Cada **feature** (módulo funcional) replica las 3 capas de Clean Architecture de forma aislada. Esto permite que cada módulo se desarrolle, testee y reemplace sin afectar a los demás.
+## 2. Clean Architecture en el frontend (`mobile/lib/`)
 
 ```
 lib/
-├── core/                     → Código transversal, sin lógica de negocio
-│   ├── constants/            → Valores fijos: colores, endpoints, strings, tarifas mínimas
-│   ├── error/                → Clases de error/Failure compartidas (ej. ServerFailure, NetworkFailure)
-│   ├── network/              → Cliente HTTP base (Dio/http), interceptores, manejo de conectividad
-│   ├── theme/                → Tema visual de la app (colores, tipografías, estilos Material)
-│   ├── utils/                → Funciones auxiliares puras (formatters, validators)
-│   ├── widgets/               → Widgets reutilizables sin lógica de negocio (botones, loaders, dialogs)
-│   └── routing/              → Definición de rutas/navegación global de la app
+├── core/                      → Código transversal, sin lógica de negocio
+│   ├── constants/             → Endpoints de la API
+│   ├── di/                    → service_locator.dart: punto de composición manual
+│   ├── enums/                 → Estados (EstadoSolicitud, EstadoViaje, EstadoOferta, TipoOferta, RolUsuario)
+│   ├── error/                 → ServerException, mensajeDeError()
+│   ├── location/              → LocationService + LocationCalculos (geolocator)
+│   ├── network/                → ApiClient (http + cookie de sesión manual)
+│   ├── realtime/              → SocketService, eventos y salas de Socket.IO
+│   ├── routing/                → app_routes.dart, app_router.dart (go_router)
+│   └── theme/                  → Tema Material de la app
 │
 └── features/
     └── <feature>/
-        ├── domain/            → Reglas de negocio puras, sin Flutter ni paquetes externos
-        │   ├── entities/      → Objetos de negocio (ej. Trip, Offer, User)
-        │   ├── repositories/  → Contratos abstractos (interfaces) que Data debe implementar
-        │   └── usecases/      → Una clase por acción de negocio (ej. SendTripOffer)
-        │
-        ├── data/              → Implementación concreta del acceso a datos
-        │   ├── models/        → DTOs que extienden las entidades (fromJson/toJson)
-        │   ├── datasources/   → Llamadas reales a la API Django (remote) o caché local (local)
-        │   └── repositories/  → Implementación concreta de los contratos del domain
-        │
-        └── presentation/      → Todo lo que el usuario ve e interactúa
-            ├── pages/         → Pantallas (screens) del feature
-            ├── widgets/       → Widgets específicos de este feature (no reutilizables fuera)
-            └── providers/     → Manejo de estado (Provider/Riverpod) que conecta UI ↔ domain
+        ├── domain/             → entities/, repositories/ (contratos), usecases/
+        ├── data/               → models/ (fromJson/toJson), datasources/, repositories/ (impl)
+        └── presentation/       → pages/, providers/ (solo auth usa Provider; el resto maneja
+                                  su estado con StatefulWidget directamente)
 ```
 
-### Regla de dependencia (Clean Architecture)
+### Regla de dependencia
 
 ```
 presentation  →  domain  ←  data
 ```
 
-* `domain` no conoce a nadie (no importa Flutter, no importa `data`, no importa `presentation`).
-* `data` depende de `domain` (implementa sus interfaces).
-* `presentation` depende de `domain` (usa los usecases, nunca llama directo a `data`).
+`domain` no importa Flutter ni `data`. `data` implementa los contratos de
+`domain`. `presentation` consume usecases a través de `ServiceLocator`.
 
-### Features definidos
+### Features implementados
 
 | Feature | Responsabilidad |
 |---|---|
-| `auth` | Login, registro, recuperación de contraseña, selección de rol (pasajero/conductor) |
-| `onboarding` | Pantallas de bienvenida previas al login |
-| `profile` | Ver/editar perfil, datos del vehículo (conductor), documentos |
-| `trip_request` | Pasajero define origen/destino y propone tarifa inicial |
-| `negotiation` | Lógica de ofertas/contraofertas/aceptación/rechazo entre pasajero y conductor |
-| `trip_tracking` | Seguimiento del viaje en curso (mapa, estado, chat rápido) |
-| `trip_history` | Historial de viajes pasados |
-| `rating` | Calificación mutua pasajero ↔ conductor al finalizar el viaje |
-| `wallet` | Saldo, métodos de pago, historial de transacciones |
-| `chat` | Mensajería entre pasajero y conductor durante negociación/viaje |
-| `notifications` | Centro de notificaciones in-app |
-| `support` | Ayuda, FAQ, contacto con soporte |
-| `driver_home` | Pantalla principal del conductor (mapa con solicitudes disponibles) |
-| `passenger_home` | Pantalla principal del pasajero (mapa para solicitar viaje) |
+| `auth` | Login, registro de pasajero/conductor, sesión (`AuthProvider`) |
+| `onboarding` | Splash |
+| `profile` | Perfil y datos del vehículo del conductor (`Mototaxista`) |
+| `trip_request` | Pasajero define origen (GPS opcional)/destino y tarifa propuesta |
+| `negotiation` | Ofertas, contraofertas, aceptación/rechazo/selección |
+| `trip_tracking` | Viaje asignado / en curso, finalizar, seguimiento GPS en vivo |
+| `trip_history` | Historial de viajes (pasajero y conductor) |
+| `rating` | Calificación 1-5 al finalizar el viaje |
+| `driver_home` | Pantalla principal del conductor, notificación de nuevas solicitudes |
+| `passenger_home` | Pantalla principal del pasajero, notificación de ofertas |
+| `admin` | Dashboard, gestión de usuarios, listas de pasajeros/conductores |
+
+`chat`, `wallet`, `support` y `notifications` no forman parte del MVP — ver
+[BACKLOG.md](BACKLOG.md) para el detalle y el orden de prioridad si se
+retoman.
 
 ---
 
-## 3. Entidades (Domain Layer)
-
-Entidades = objetos de negocio puros, compartidos conceptualmente entre features.
-
-| Entidad | Pertenece a | Descripción |
-|---|---|---|
-| `User` | auth/profile | Datos base de usuario (id, nombre, rol, teléfono, foto) |
-| `DriverProfile` | profile | Datos extendidos del conductor (vehículo, placa, licencia, documentos) |
-| `Trip` | trip_request/trip_tracking | Viaje: origen, destino, estado, pasajero, conductor asignado |
-| `Offer` | negotiation | Oferta de tarifa: monto, autor (pasajero/conductor), estado (pendiente/aceptada/rechazada/contraoferta) |
-| `NegotiationSession` | negotiation | Agrupa el historial de ofertas de un `Trip` específico |
-| `Rating` | rating | Calificación: puntaje, comentario, autor, receptor, viaje asociado |
-| `WalletTransaction` | wallet | Movimiento de saldo: monto, tipo, fecha, viaje asociado |
-| `ChatMessage` | chat | Mensaje: contenido, autor, timestamp, viaje asociado |
-| `AppNotification` | notifications | Notificación: título, cuerpo, tipo, leída/no leída |
-
----
-
-## 4. Casos de uso (Domain Layer) — por feature
-
-Cada caso de uso = una acción de negocio, una clase, un método `call()`.
-
-**auth**
-- `LoginUser`, `RegisterUser`, `LogoutUser`, `RecoverPassword`, `SelectUserRole`
-
-**profile**
-- `GetUserProfile`, `UpdateUserProfile`, `UploadDriverDocuments`
-
-**trip_request**
-- `CreateTripRequest`, `ProposeInitialFare`, `CancelTripRequest`
-
-**negotiation**
-- `SendOffer`, `AcceptOffer`, `RejectOffer`, `CounterOffer`, `SelectBestOffer`, `GetNegotiationHistory`
-
-**trip_tracking**
-- `GetTripStatus`, `UpdateDriverLocation`, `StartTrip`, `CompleteTrip`
-
-**trip_history**
-- `GetTripHistory`, `GetTripDetail`
-
-**rating**
-- `SubmitRating`, `GetUserRatings`
-
-**wallet**
-- `GetWalletBalance`, `GetTransactionHistory`, `AddFunds`
-
-**chat**
-- `SendMessage`, `GetMessages`
-
-**notifications**
-- `GetNotifications`, `MarkNotificationAsRead`
-
----
-
-## 5. Repositorios (contratos Domain + implementación Data)
-
-Por cada feature con persistencia, el `domain/repositories/` define la interfaz y `data/repositories/` la implementa usando `data/datasources/`.
-
-| Repositorio (interfaz) | Implementado en | Usado por casos de uso |
-|---|---|---|
-| `AuthRepository` | `data/repositories/auth_repository_impl.dart` | Login/Register/Logout |
-| `ProfileRepository` | `profile_repository_impl.dart` | Get/UpdateProfile |
-| `TripRepository` | `trip_repository_impl.dart` | CreateTrip/GetStatus |
-| `NegotiationRepository` | `negotiation_repository_impl.dart` | SendOffer/AcceptOffer/CounterOffer |
-| `RatingRepository` | `rating_repository_impl.dart` | SubmitRating |
-| `WalletRepository` | `wallet_repository_impl.dart` | GetBalance/AddFunds |
-| `ChatRepository` | `chat_repository_impl.dart` | SendMessage/GetMessages |
-| `NotificationRepository` | `notification_repository_impl.dart` | GetNotifications |
-
----
-
-## 6. Providers (Presentation Layer — gestión de estado)
-
-Un provider por feature, conectando UI con los casos de uso del domain. Sugerido: `Provider` o `Riverpod`.
-
-| Provider | Estado que gestiona |
-|---|---|
-| `AuthProvider` | Sesión actual, estado de login |
-| `ProfileProvider` | Datos del perfil cargado |
-| `TripRequestProvider` | Origen, destino, tarifa propuesta |
-| `NegotiationProvider` | Lista de ofertas activas, oferta seleccionada |
-| `TripTrackingProvider` | Estado del viaje en curso, ubicación en tiempo real |
-| `TripHistoryProvider` | Lista de viajes pasados |
-| `RatingProvider` | Estado del formulario de calificación |
-| `WalletProvider` | Saldo, transacciones |
-| `ChatProvider` | Mensajes del chat activo |
-| `NotificationProvider` | Lista de notificaciones, contador no leídas |
-| `DriverHomeProvider` | Solicitudes de viaje disponibles para el conductor |
-| `PassengerHomeProvider` | Estado del mapa/búsqueda del pasajero |
-
----
-
-## 7. Routing (`core/routing/`)
-
-Define las rutas nombradas de la app y el árbol de navegación. Sugerido: `go_router`.
-
-Ejemplo de nombres de ruta (sin implementación todavía):
+## 3. Rutas reales (`core/routing/app_routes.dart`, `go_router`)
 
 ```
 /splash
-/onboarding
-/login
-/register
 /role-selection
+/login/:rol
+/registro-pasajero
+/registro-mototaxista
 /passenger/home
-/passenger/trip-request
-/passenger/negotiation
-/passenger/tracking
+/passenger/crear-solicitud
+/passenger/proponer-tarifa
+/passenger/ofertas/:solicitudId
+/passenger/conductor-seleccionado
+/passenger/viaje-en-curso/:viajeId
+/passenger/calificacion/:viajeId
+/passenger/historial
 /driver/home
-/driver/incoming-requests
-/driver/negotiation
-/driver/tracking
-/trip/history
-/trip/detail/:id
-/rating/:tripId
-/profile
-/profile/edit
-/wallet
-/chat/:tripId
-/notifications
-/support
+/driver/solicitudes
+/driver/contraoferta/:solicitudId
+/driver/viaje-asignado/:viajeId
+/driver/historial
+/admin/dashboard
+/admin/usuarios
+/admin/conductores
+/admin/pasajeros
 ```
 
 ---
 
-## 8. Las 22 pantallas del MVP
+## 4. Gestión de estado
 
-| # | Pantalla | Feature | Rol |
-|---|---|---|---|
-| 1 | Splash | onboarding | Ambos |
-| 2 | Onboarding / Bienvenida | onboarding | Ambos |
-| 3 | Login | auth | Ambos |
-| 4 | Registro | auth | Ambos |
-| 5 | Recuperar contraseña | auth | Ambos |
-| 6 | Selección de rol (Pasajero/Conductor) | auth | Ambos |
-| 7 | Home Pasajero (mapa, botón solicitar) | passenger_home | Pasajero |
-| 8 | Solicitud de viaje (origen/destino + tarifa inicial) | trip_request | Pasajero |
-| 9 | Negociación — vista Pasajero (ofertas recibidas) | negotiation | Pasajero |
-| 10 | Selección de mejor oferta | negotiation | Pasajero |
-| 11 | Home Conductor (mapa, solicitudes cercanas) | driver_home | Conductor |
-| 12 | Detalle de solicitud entrante | driver_home | Conductor |
-| 13 | Negociación — vista Conductor (aceptar/contraofertar/rechazar) | negotiation | Conductor |
-| 14 | Viaje en curso / Tracking (mapa en vivo) | trip_tracking | Ambos |
-| 15 | Chat del viaje | chat | Ambos |
-| 16 | Finalización del viaje (resumen) | trip_tracking | Ambos |
-| 17 | Calificación post-viaje | rating | Ambos |
-| 18 | Historial de viajes | trip_history | Ambos |
-| 19 | Detalle de viaje (historial) | trip_history | Ambos |
-| 20 | Perfil de usuario | profile | Ambos |
-| 21 | Edición de perfil / Documentos del conductor | profile | Ambos |
-| 22 | Billetera (saldo y transacciones) | wallet | Ambos |
-
-*(Notificaciones y Soporte quedan como pantallas secundarias fuera del conteo de las 22 principales del flujo MVP, pero ya tienen carpeta reservada en `features/notifications` y `features/support` para etapas posteriores.)*
+`AuthProvider` (`ChangeNotifier`) es el único provider de la app: mantiene
+la sesión del usuario autenticado y se inyecta vía
+`ChangeNotifierProvider` en `main.dart`. El resto de pantallas maneja su
+propio estado de carga/error/datos con `StatefulWidget` + `setState`,
+usando `AsyncStateView<T>` (`shared/widgets/async_state_view.dart`) como
+patrón compartido para no repetir la misma cascada de
+cargando/error/vacío/datos en cada pantalla con listas.
 
 ---
 
-## 9. Clean Architecture en el Backend (Django)
-
-El backend organiza cada dominio de negocio como una "app" Django, dividida internamente en capas para mantener el paralelismo con el frontend.
+## 5. Clean Architecture en el backend (`backend/`)
 
 ```
-backend/motolink_backend/
-├── config/                        → settings.py, urls.py raíz, wsgi/asgi, configuración del proyecto Django
-└── apps/
-    └── <app>/
-        ├── domain/                 → Entidades de negocio puras / reglas de validación (independientes del ORM)
-        ├── application/
-        │   └── usecases/           → Orquestación de la lógica de negocio (equivalente a los usecases del frontend)
-        ├── infrastructure/
-        │   ├── migrations/         → Migraciones de modelos Django (ORM ↔ SQLite)
-        │   └── serializers/        → Serializers DRF (modelo ↔ JSON)
-        └── presentation/           → Views/ViewSets DRF, urls.py de la app (capa HTTP)
+backend/
+├── backend/        → settings.py (config por entorno vía .env), urls.py, wsgi.py
+├── core/            → SesionUsuarioAuthentication, realtime (Socket.IO: server, events, notifier)
+└── <app>/
+    ├── domain/          → Excepciones de negocio (ej. OfertaDuplicadaError)
+    ├── application/     → usecases/ y services/ (NegotiationService)
+    ├── infrastructure/  → models.py, serializers.py, migrations/, repositories.py
+    └── presentation/    → views.py (ViewSets DRF), urls.py
 ```
 
-### Apps definidas
+### Apps reales
 
 | App | Responsabilidad |
 |---|---|
-| `users` | Autenticación, perfiles de pasajero y conductor |
-| `trips` | Ciclo de vida del viaje (solicitud, asignación, estado, finalización) |
-| `negotiation` | Ofertas, contraofertas, aceptación/rechazo de tarifas |
-| `ratings` | Calificaciones entre pasajero y conductor |
-| `wallet` | Saldo y transacciones |
-| `chat` | Mensajería asociada a un viaje |
-| `notifications` | Notificaciones push/in-app |
-| `core` | Utilidades compartidas entre apps (permisos comunes, mixins, excepciones base) |
+| `users` | `Usuario`, `Mototaxista`; login/logout/me, registro, listados |
+| `trips` | `SolicitudViaje`, `Viaje`; creación, historial, viaje activo, finalizar |
+| `negotiation` | `Oferta`; aceptar/contraofertar/rechazar/seleccionar vía `NegotiationService` |
+| `ratings` | `Calificacion` (1-5, una por viaje) |
+| `core` | Autenticación por sesión, Socket.IO (servidor, eventos, notificador) |
 
-### Regla de dependencia (igual que en frontend)
+### Tiempo real (Socket.IO)
+
+| Sala | Quién se suscribe | Eventos |
+|---|---|---|
+| `conductores` | Todo conductor conectado (pantalla de inicio o lista de solicitudes) | `SolicitudCreada` |
+| `solicitud_<id>` | Quien esté viendo "Ofertas recibidas" de esa solicitud | `OfertaCreada`, `ContraOfertaCreada` |
+| `usuario_<id>` | El propio pasajero/conductor, desde cualquier pantalla | `OfertaCreada`, `ContraOfertaCreada` (pasajero), `ViajeAsignado` (ambos) |
+
+### Regla de dependencia
 
 ```
-presentation (views/DRF)  →  application/usecases  →  domain
-                                      ↑
-                              infrastructure (ORM, serializers)
+presentation (views DRF)  →  application (usecases/services)  →  domain
+                                       ↑
+                               infrastructure (modelos ORM, serializers)
 ```
-
-* `domain` no importa Django ni DRF: son reglas de negocio puras.
-* `infrastructure` implementa el acceso a datos (modelos ORM) que `application` usa.
-* `presentation` solo expone HTTP; no contiene lógica de negocio.
 
 ---
 
-## 10. Próximos pasos (fuera de esta etapa)
+## 6. Configuración por entorno
 
-1. Inicializar proyecto Flutter real (`flutter create`) dentro de `frontend/motolink_app`.
-2. Inicializar proyecto Django real (`django-admin startproject`) dentro de `backend/motolink_backend`.
-3. Definir modelos Django concretos por app.
-4. Implementar entidades y usecases del frontend.
-5. Definir contratos de API (endpoints REST) entre frontend y backend.
+`backend/backend/settings.py` lee `DJANGO_SECRET_KEY`, `DJANGO_DEBUG` y
+`DJANGO_ALLOWED_HOSTS` desde variables de entorno (`backend/.env`, no
+versionado — ver `backend/.env.example`), con defaults seguros para
+desarrollo local si no existe `.env`.
 
-> Esta etapa solo entrega la estructura de carpetas y su documentación. No hay código funcional, modelos, ni dependencias instaladas.
+---
+
+## 7. Pruebas automatizadas
+
+- **Backend** (`python manage.py test`): flujo completo de negociación,
+  duplicidad de ofertas, validación de calificación, historial para ambas
+  partes, login/registro/sesión, casos de concurrencia entre conductores
+  y entradas inexistentes (404 controlado, no 500).
+- **Mobile** (`flutter test`): parsing de modelos contra la forma real del
+  JSON del backend (decimales como `num`, snake_case, contraseña ausente).

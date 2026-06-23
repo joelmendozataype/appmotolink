@@ -62,17 +62,28 @@ especulativos.
 En respuesta al pendiente "agregar al menos pruebas del flujo de
 negociación":
 
-- **Backend** (`python manage.py test`): 16 pruebas — flujo completo de
+- **Backend** (`python manage.py test`): 23 pruebas — flujo completo de
   negociación (aceptar/contraofertar/rechazar/seleccionar/finalizar/
   calificar/historial), duplicidad de ofertas, validación de rango de
-  calificación, historial visible para ambas partes, login/registro.
-- **Mobile** (`flutter test`): 9 pruebas — parsing de modelos contra la
+  calificación, historial visible para ambas partes, login/registro,
+  persistencia de sesión (`/me`, logout), y casos de concurrencia entre
+  conductores compitiendo por la misma solicitud.
+- **Mobile** (`flutter test`): 14 pruebas — parsing de modelos contra la
   forma real del JSON del backend (snake_case, decimales como `num`,
-  contraseña ausente), exactamente los puntos donde se encontraron bugs
-  reales arriba.
+  contraseña ausente) y pruebas de widget del componente `AsyncStateView`
+  compartido (cargando/error/vacío/datos, callback de reintentar).
 
 Ambas suites pasan en verde (`OK` / `All tests passed!`) al momento de
 este commit.
+
+### Bug adicional encontrado por las pruebas nuevas
+
+Al escribir `negotiation/tests_concurrencia.py` se confirmó que
+`seleccionar` una oferta con un UUID inexistente lanzaba `500` (el
+repositorio usa `Oferta.objects.get()`, que levanta `DoesNotExist` sin
+capturar). Se corrigió devolviendo `404` controlado en `seleccionar`,
+`aceptar`, `contraofertar` y `rechazar` — los cuatro endpoints tenían el
+mismo patrón de bug.
 
 ## Herramienta de demo (no parte del MVP)
 

@@ -26,15 +26,22 @@ MOTOLINK/
 ```bash
 cd backend
 pip install -r requirements.txt
+cp .env.example .env   # opcional en desarrollo; sin .env se usan defaults seguros
 python manage.py migrate
 python manage.py runserver
 ```
+
+Configuración por entorno (`backend/.env`, no versionado — ver
+`.env.example`): `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`.
+**Antes de desplegar a producción**: define `DJANGO_SECRET_KEY` propia,
+`DJANGO_DEBUG=False` y `DJANGO_ALLOWED_HOSTS` con tu dominio real.
 
 ### Móvil
 
 ```bash
 cd mobile
 flutter pub get
+flutter analyze   # debe quedar sin errores antes de compilar/commitear
 flutter run
 ```
 
@@ -48,8 +55,8 @@ python demo_driver_bot.py
 ## Pruebas automatizadas
 
 ```bash
-cd backend && python manage.py test     # 16 pruebas: flujo de negociación, login, calificación, historial
-cd mobile && flutter test               # 9 pruebas: parsing de modelos contra el contrato real del backend
+cd backend && python manage.py test     # 23 pruebas: negociación, concurrencia/404, login/sesión, calificación, historial
+cd mobile && flutter test               # 14 pruebas: parsing de modelos + widget AsyncStateView
 ```
 
 ## Documentación
