@@ -100,26 +100,42 @@ class _OfertasRecibidasPageState extends State<OfertasRecibidasPage> {
                   itemBuilder: (context, index) {
                     final oferta = _ofertas[index];
                     return Card(
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading:
-                            const CircleAvatar(child: Icon(Icons.two_wheeler)),
-                        title: Text(oferta.conductor.usuario.nombre),
-                        subtitle: Text(
-                          '${oferta.conductor.marcaVehiculo} ${oferta.conductor.modeloVehiculo} · Placa ${oferta.conductor.placa}',
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Text(
-                              'S/ ${oferta.tarifa.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                            Row(
+                              children: [
+                                const CircleAvatar(
+                                  child: Icon(Icons.two_wheeler),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(oferta.conductor.usuario.nombre),
+                                      Text(
+                                        '${oferta.conductor.marcaVehiculo} ${oferta.conductor.modeloVehiculo} · Placa ${oferta.conductor.placa}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  'S/ ${oferta.tarifa.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 12),
                             FilledButton(
                               onPressed: () => _seleccionar(oferta),
                               child: const Text('Seleccionar'),
