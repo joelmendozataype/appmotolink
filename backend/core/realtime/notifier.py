@@ -76,18 +76,22 @@ class SocketIORealtimeNotifier(RealtimeNotifier):
         )
 
     def notificar_oferta_creada(self, oferta):
-        # El pasajero, suscrito al canal de su solicitud, ve la oferta (paso 5).
+        # Doble notificación: al canal de la solicitud (paso 5, para quien
+        # esté viendo "Ofertas recibidas") y al canal del pasajero (para
+        # que se entere desde cualquier pantalla, ej. la pantalla de inicio).
+        payload = _payload_oferta(oferta)
+        sio.emit(RealtimeEvents.OFERTA_CREADA, payload, room=room_solicitud(oferta.solicitud_id))
         sio.emit(
-            RealtimeEvents.OFERTA_CREADA,
-            _payload_oferta(oferta),
-            room=room_solicitud(oferta.solicitud_id),
+            RealtimeEvents.OFERTA_CREADA, payload,
+            room=room_usuario(oferta.solicitud.pasajero_id),
         )
 
     def notificar_contraoferta_creada(self, oferta):
+        payload = _payload_oferta(oferta)
+        sio.emit(RealtimeEvents.CONTRAOFERTA_CREADA, payload, room=room_solicitud(oferta.solicitud_id))
         sio.emit(
-            RealtimeEvents.CONTRAOFERTA_CREADA,
-            _payload_oferta(oferta),
-            room=room_solicitud(oferta.solicitud_id),
+            RealtimeEvents.CONTRAOFERTA_CREADA, payload,
+            room=room_usuario(oferta.solicitud.pasajero_id),
         )
 
     def notificar_oferta_aceptada(self, oferta):

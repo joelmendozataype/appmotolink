@@ -25,15 +25,23 @@ class _InicioMototaxistaPageState extends State<InicioMototaxistaPage> {
       SocketService.instance.joinRoom(SocketRooms.usuario(conductorId));
       SocketService.instance.onViajeAsignado(_onViajeAsignado);
     }
+    // También se suscribe al canal global de conductores para saber de
+    // nuevas solicitudes sin necesidad de estar parado en "Solicitudes
+    // disponibles" (paso 3). Sin esto, el conductor solo se enteraba de
+    // una solicitud nueva si ya tenía esa pantalla abierta.
+    SocketService.instance.joinRoom(SocketRooms.conductores);
+    SocketService.instance.onSolicitudCreada(_onSolicitudCreada);
   }
 
   @override
   void dispose() {
     SocketService.instance.off(SocketEvents.viajeAsignado);
+    SocketService.instance.off(SocketEvents.solicitudCreada);
     final conductorId = context.read<AuthProvider>().usuarioActual?.id;
     if (conductorId != null) {
       SocketService.instance.leaveRoom(SocketRooms.usuario(conductorId));
     }
+    SocketService.instance.leaveRoom(SocketRooms.conductores);
     super.dispose();
   }
 
@@ -45,6 +53,21 @@ class _InicioMototaxistaPageState extends State<InicioMototaxistaPage> {
       const SnackBar(content: Text('¡Un pasajero te seleccionó!')),
     );
     context.push(AppRoutes.viajeAsignadoPath(viajeId));
+  }
+
+  void _onSolicitudCreada(dynamic data) {
+    if (!mounted) return;
+    final origen = data['origen'] ?? '';
+    final destino = data['destino'] ?? '';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Nueva solicitud: $origen → $destino'),
+        action: SnackBarAction(
+          label: 'Ver',
+          onPressed: () => context.push(AppRoutes.solicitudesDisponibles),
+        ),
+      ),
+    );
   }
 
   Future<void> _cerrarSesion() async {
