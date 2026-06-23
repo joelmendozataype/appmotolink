@@ -6,7 +6,7 @@ import 'package:mobile/core/realtime/socket_service.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/negotiation/domain/entities/oferta_entity.dart';
-import 'package:mobile/shared/widgets/error_retry_view.dart';
+import 'package:mobile/shared/widgets/async_state_view.dart';
 
 class OfertasRecibidasPage extends StatefulWidget {
   final String solicitudId;
@@ -88,64 +88,63 @@ class _OfertasRecibidasPageState extends State<OfertasRecibidasPage> {
           ),
         ],
       ),
-      body: _error != null
-          ? ErrorRetryView(mensaje: _error!, onRetry: _cargarOfertas)
-          : _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : _ofertas.isEmpty
-              ? const Center(child: Text('Esperando ofertas de mototaxistas...'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _ofertas.length,
-                  itemBuilder: (context, index) {
-                    final oferta = _ofertas[index];
-                    return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                const CircleAvatar(
-                                  child: Icon(Icons.two_wheeler),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(oferta.conductor.usuario.nombre),
-                                      Text(
-                                        '${oferta.conductor.marcaVehiculo} ${oferta.conductor.modeloVehiculo} · Placa ${oferta.conductor.placa}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Text(
-                                  'S/ ${oferta.tarifa.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                              onPressed: () => _seleccionar(oferta),
-                              child: const Text('Seleccionar'),
-                            ),
-                          ],
+      body: AsyncStateView<List<Oferta>>(
+        cargando: _cargando,
+        error: _error,
+        datos: _ofertas,
+        estaVacio: (l) => l.isEmpty,
+        onReintentar: _cargarOfertas,
+        mensajeVacio: 'Esperando ofertas de mototaxistas...',
+        builder: (ofertas) => ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: ofertas.length,
+          itemBuilder: (context, index) {
+            final oferta = ofertas[index];
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const CircleAvatar(
+                          child: Icon(Icons.two_wheeler),
                         ),
-                      ),
-                    );
-                  },
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(oferta.conductor.usuario.nombre),
+                              Text(
+                                '${oferta.conductor.marcaVehiculo} ${oferta.conductor.modeloVehiculo} · Placa ${oferta.conductor.placa}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          'S/ ${oferta.tarifa.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => _seleccionar(oferta),
+                      child: const Text('Seleccionar'),
+                    ),
+                  ],
                 ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

@@ -4,7 +4,7 @@ import 'package:mobile/core/enums/estado_viaje.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/trip_tracking/domain/entities/viaje_entity.dart';
-import 'package:mobile/shared/widgets/error_retry_view.dart';
+import 'package:mobile/shared/widgets/async_state_view.dart';
 import 'package:provider/provider.dart';
 
 class HistorialMototaxistaPage extends StatefulWidget {
@@ -69,30 +69,32 @@ class _HistorialMototaxistaPageState extends State<HistorialMototaxistaPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Historial de viajes')),
-      body: _error != null
-          ? ErrorRetryView(mensaje: _error!, onRetry: _cargarHistorial)
-          : _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : _viajes.isEmpty
-              ? const Center(child: Text('Aún no tienes viajes registrados'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _viajes.length,
-                  itemBuilder: (context, index) {
-                    final viaje = _viajes[index];
-                    return Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.person),
-                        title: Text(viaje.pasajero.nombre),
-                        subtitle: Text(_etiquetaEstado(viaje.estado)),
-                        trailing: Text(
-                          'S/ ${viaje.tarifaFinal.toStringAsFixed(2)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    );
-                  },
+      body: AsyncStateView<List<Viaje>>(
+        cargando: _cargando,
+        error: _error,
+        datos: _viajes,
+        estaVacio: (l) => l.isEmpty,
+        onReintentar: _cargarHistorial,
+        mensajeVacio: 'Aún no tienes viajes registrados',
+        builder: (viajes) => ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: viajes.length,
+          itemBuilder: (context, index) {
+            final viaje = viajes[index];
+            return Card(
+              child: ListTile(
+                leading: const Icon(Icons.person),
+                title: Text(viaje.pasajero.nombre),
+                subtitle: Text(_etiquetaEstado(viaje.estado)),
+                trailing: Text(
+                  'S/ ${viaje.tarifaFinal.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

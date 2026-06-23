@@ -3,7 +3,7 @@ import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/enums/rol_usuario.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/features/auth/domain/entities/usuario_entity.dart';
-import 'package:mobile/shared/widgets/error_retry_view.dart';
+import 'package:mobile/shared/widgets/async_state_view.dart';
 
 class GestionUsuariosPage extends StatefulWidget {
   const GestionUsuariosPage({super.key});
@@ -70,32 +70,36 @@ class _GestionUsuariosPageState extends State<GestionUsuariosPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Gestión de usuarios')),
-      body: _error != null
-          ? ErrorRetryView(mensaje: _error!, onRetry: _cargarUsuarios)
-          : _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _usuarios.length,
-              itemBuilder: (context, index) {
-                final usuario = _usuarios[index];
-                return Card(
-                  child: ListTile(
-                    leading: CircleAvatar(child: Text(usuario.nombre[0])),
-                    title: Text(usuario.nombre),
-                    subtitle: Text(
-                      '${usuario.correo} · ${_etiquetaRol(usuario.rol)}',
-                    ),
-                    trailing: usuario.rol == RolUsuario.administrador
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () => _eliminar(usuario.id),
-                          ),
-                  ),
-                );
-              },
-            ),
+      body: AsyncStateView<List<Usuario>>(
+        cargando: _cargando,
+        error: _error,
+        datos: _usuarios,
+        estaVacio: (l) => l.isEmpty,
+        onReintentar: _cargarUsuarios,
+        mensajeVacio: 'No hay usuarios registrados',
+        builder: (usuarios) => ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: usuarios.length,
+          itemBuilder: (context, index) {
+            final usuario = usuarios[index];
+            return Card(
+              child: ListTile(
+                leading: CircleAvatar(child: Text(usuario.nombre[0])),
+                title: Text(usuario.nombre),
+                subtitle: Text(
+                  '${usuario.correo} · ${_etiquetaRol(usuario.rol)}',
+                ),
+                trailing: usuario.rol == RolUsuario.administrador
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _eliminar(usuario.id),
+                      ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

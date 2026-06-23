@@ -6,7 +6,7 @@ import 'package:mobile/core/realtime/socket_service.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/trip_request/domain/entities/solicitud_viaje_entity.dart';
-import 'package:mobile/shared/widgets/error_retry_view.dart';
+import 'package:mobile/shared/widgets/async_state_view.dart';
 
 class SolicitudesDisponiblesPage extends StatefulWidget {
   const SolicitudesDisponiblesPage({super.key});
@@ -85,34 +85,35 @@ class _SolicitudesDisponiblesPageState
           ),
         ],
       ),
-      body: _error != null
-          ? ErrorRetryView(mensaje: _error!, onRetry: _cargarSolicitudes)
-          : _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : _disponibles.isEmpty
-              ? const Center(child: Text('No hay solicitudes disponibles ahora'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _disponibles.length,
-                  itemBuilder: (context, index) {
-                    final solicitud = _disponibles[index];
-                    return Card(
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading: const Icon(Icons.location_on),
-                        title:
-                            Text('${solicitud.origen} → ${solicitud.destino}'),
-                        subtitle: Text(
-                          'Tarifa propuesta: S/ ${solicitud.tarifaPropuesta.toStringAsFixed(2)}',
-                        ),
-                        trailing: FilledButton(
-                          onPressed: () => _verSolicitud(solicitud),
-                          child: const Text('Ofertar'),
-                        ),
-                      ),
-                    );
-                  },
+      body: AsyncStateView<List<SolicitudViaje>>(
+        cargando: _cargando,
+        error: _error,
+        datos: _disponibles,
+        estaVacio: (l) => l.isEmpty,
+        onReintentar: _cargarSolicitudes,
+        mensajeVacio: 'No hay solicitudes disponibles ahora',
+        builder: (disponibles) => ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: disponibles.length,
+          itemBuilder: (context, index) {
+            final solicitud = disponibles[index];
+            return Card(
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(16),
+                leading: const Icon(Icons.location_on),
+                title: Text('${solicitud.origen} → ${solicitud.destino}'),
+                subtitle: Text(
+                  'Tarifa propuesta: S/ ${solicitud.tarifaPropuesta.toStringAsFixed(2)}',
                 ),
+                trailing: FilledButton(
+                  onPressed: () => _verSolicitud(solicitud),
+                  child: const Text('Ofertar'),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
