@@ -40,3 +40,45 @@ class LocationService {
         '${posicion.longitude.toStringAsFixed(5)}';
   }
 }
+
+/// Cálculos sobre posiciones GPS reales (no simuladas): distancia entre dos
+/// puntos, tiempo estimado a velocidad de mototaxi urbano, formato legible
+/// y un stream para seguir la ubicación en vivo durante un viaje.
+class LocationCalculos {
+  LocationCalculos._();
+
+  /// Distancia en línea recta entre dos posiciones, vía la fórmula de
+  /// Haversine que ya implementa geolocator.
+  static double distanciaEnMetros(Position origen, Position destino) {
+    return Geolocator.distanceBetween(
+      origen.latitude,
+      origen.longitude,
+      destino.latitude,
+      destino.longitude,
+    );
+  }
+
+  /// Minutos estimados para recorrer [metros] a una velocidad promedio de
+  /// mototaxi urbano (20 km/h por defecto), redondeado hacia arriba.
+  static int minutosEstimados(double metros, {double velocidadKmh = 20}) {
+    final metrosPorMinuto = (velocidadKmh * 1000) / 60;
+    return (metros / metrosPorMinuto).ceil();
+  }
+
+  static String distanciaLegible(double metros) {
+    if (metros < 1000) return '${metros.round()} m';
+    return '${(metros / 1000).toStringAsFixed(1)} km';
+  }
+
+  /// Stream de posiciones en vivo (ej. para seguir el avance durante un
+  /// viaje en curso). [distanciaMinimaMetros] evita actualizaciones
+  /// excesivas cuando el dispositivo apenas se mueve.
+  static Stream<Position> seguirUbicacion({int distanciaMinimaMetros = 10}) {
+    return Geolocator.getPositionStream(
+      locationSettings: LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distanciaMinimaMetros,
+      ),
+    );
+  }
+}

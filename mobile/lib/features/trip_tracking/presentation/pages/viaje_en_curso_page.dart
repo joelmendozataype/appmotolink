@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/error/exceptions.dart';
+import 'package:mobile/core/location/location_service.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/trip_tracking/domain/entities/viaje_entity.dart';
 import 'package:mobile/shared/widgets/error_retry_view.dart';
@@ -20,10 +24,21 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
   String? _error;
   bool _finalizando = false;
 
+  Position? _posicionInicial;
+  Position? _posicionActual;
+  StreamSubscription<Position>? _suscripcionUbicacion;
+
   @override
   void initState() {
     super.initState();
     _cargarViaje();
+    _iniciarSeguimientoGps();
+  }
+
+  @override
+  void dispose() {
+    _suscripcionUbicacion?.cancel();
+    super.dispose();
   }
 
   Future<void> _cargarViaje() async {
@@ -35,6 +50,28 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = mensajeDeError(e));
+    }
+  }
+
+  /// Sensor GPS real durante el viaje: captura la posición al iniciar y
+  /// sigue la ubicación en vivo para mostrar cuánto se ha recorrido desde
+  /// ese punto. Si el GPS no está disponible, el viaje sigue funcionando
+  /// igual (este panel simplemente no se muestra).
+  Future<void> _iniciarSeguimientoGps() async {
+    try {
+      final inicial = await LocationService.obtenerUbicacionActual();
+      if (!mounted) return;
+      setState(() {
+        _posicionInicial = inicial;
+        _posicionActual = inicial;
+      });
+      _suscripcionUbicacion = LocationCalculos.seguirUbicacion().listen((pos) {
+        if (!mounted) return;
+        setState(() => _posicionActual = pos);
+      });
+    } on LocationPermissionDeniedException {
+      // GPS desactivado o permiso denegado: el viaje continúa sin el
+      // panel de seguimiento, no es un error bloqueante.
     }
   }
 
@@ -53,6 +90,16 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
     }
   }
 
+  String _textoSeguimientoGps() {
+    final inicial = _posicionInicial;
+    final actual = _posicionActual;
+    if (inicial == null || actual == null) {
+      return 'Obteniendo ubicación GPS...';
+    }
+    final metros = LocationCalculos.distanciaEnMetros(inicial, actual);
+    return 'Recorrido: ${LocationCalculos.distanciaLegible(metros)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final viaje = _viaje;
@@ -67,13 +114,13 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
                 Expanded(
                   child: Container(
                     color: Colors.teal.shade50,
-                    child: const Center(
+                    child: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.map, size: 80, color: Colors.teal),
-                          SizedBox(height: 8),
-                          Text('Mapa en vivo (simulado)'),
+                          const Icon(Icons.gps_fixed, size: 80, color: Colors.teal),
+                          const SizedBox(height: 8),
+                          Text(_textoSeguimientoGps()),
                         ],
                       ),
                     ),
