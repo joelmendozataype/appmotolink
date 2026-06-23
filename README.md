@@ -38,7 +38,22 @@ flutter pub get
 flutter run
 ```
 
+### Demo sin un segundo dispositivo conductor (opcional)
+
+```bash
+cd backend
+python demo_driver_bot.py
+```
+
+## Pruebas automatizadas
+
+```bash
+cd backend && python manage.py test     # 16 pruebas: flujo de negociación, login, calificación, historial
+cd mobile && flutter test               # 9 pruebas: parsing de modelos contra el contrato real del backend
+```
+
 ## Documentación
 
 - [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)
 - [docs/BACKLOG.md](docs/BACKLOG.md) — funcionalidades postergadas fuera del MVP
+- [docs/VERIFICACION_EJECUCION.md](docs/VERIFICACION_EJECUCION.md) — flujo verificado en ejecución contra el emulador, bugs reales encontrados y corregidos
