@@ -39,8 +39,8 @@ import 'package:mobile/features/trip_tracking/domain/usecases/obtener_viaje_por_
 /// Punto de composición manual (sin paquete de DI): instancia una sola vez
 /// el cliente HTTP y encadena datasource -> repository -> usecase para
 /// cada feature, siguiendo ApiClient -> *RemoteDataSourceImpl ->
-/// *RepositoryImpl -> *UseCase. Las páginas importan esta clase en vez de
-/// leer MockData.
+/// *RepositoryImpl -> *UseCase. Las páginas importan esta clase para
+/// consumir el backend real.
 class ServiceLocator {
   ServiceLocator._();
 
