@@ -10,22 +10,36 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Carga backend/.env si existe (no se versiona; ver .env.example). En
+# desarrollo, sin .env, todas las variables caen a los defaults de abajo.
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-je#g)z+y^f8m86+#bcgiqx(xwj(3%aud@xhk6x4cckj1j97tg)'
+# El default solo es válido para desarrollo local; en producción se debe
+# definir DJANGO_SECRET_KEY en el .env con una clave propia y secreta.
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-je#g)z+y^f8m86+#bcgiqx(xwj(3%aud@xhk6x4cckj1j97tg)',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '10.0.2.2']
+ALLOWED_HOSTS = os.environ.get(
+    'DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost,10.0.2.2',
+).split(',')
 
 
 # Application definition
@@ -50,9 +64,10 @@ REST_FRAMEWORK = {
         'core.authentication.SesionUsuarioAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
-    # AllowAny por defecto: la app móvil V0.1 todavía usa datos mock y no
-    # envía sesión. Las acciones que sí requieren sesión (logout, /me)
-    # declaran IsAuthenticated explícitamente. Etapa siguiente: JWT.
+    # AllowAny por defecto: la autenticación es por sesión Django (no JWT)
+    # y la mayoría de acciones (negociación, listados) no la requieren.
+    # Las que sí la requieren (logout, /me) declaran IsAuthenticated
+    # explícitamente. Etapa siguiente: JWT si se necesita stateless auth.
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
