@@ -1,3 +1,8 @@
-from negotiation.infrastructure.models import Oferta
+"""Compatibilidad: `negotiation.models` reexporta las entidades de dominio.
 
-__all__ = ['Oferta']
+Ya no hay modelos de Django en esta app; la persistencia es Firestore
+(ver negotiation/infrastructure/firestore_repositories.py).
+"""
+from negotiation.domain.entities import EstadoOferta, Oferta, TipoOferta
+
+__all__ = ['Oferta', 'EstadoOferta', 'TipoOferta']

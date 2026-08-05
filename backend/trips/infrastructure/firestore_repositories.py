@@ -1,0 +1,221 @@
+"""Repositorios de solicitudes y viajes sobre Firestore."""
+from core.firestore import Filtro, get_store
+from core.firestore.campos import a_decimal, a_float, a_texto_id
+from core.firestore.colecciones import SOLICITUDES, VIAJES
+from trips.domain.entities import EstadoSolicitud, EstadoViaje, SolicitudViaje, Viaje
+from trips.domain.repositories import (
+    SolicitudNoEncontradaError,
+    SolicitudViajeRepository,
+    ViajeNoEncontradoError,
+    ViajeRepository,
+)
+from users.domain.repositories import (
+    MototaxistaNoEncontradoError,
+    UsuarioNoEncontradoError,
+)
+from users.infrastructure.firestore_repositories import (
+    FirestoreMototaxistaRepository,
+    FirestoreUsuarioRepository,
+)
+
+ESTADOS_DISPONIBLES = [
+    str(EstadoSolicitud.PENDIENTE),
+    str(EstadoSolicitud.EN_NEGOCIACION),
+]
+
+
+class FirestoreSolicitudViajeRepository(SolicitudViajeRepository):
+    def __init__(self, store=None, usuario_repo=None):
+        self._store_inyectado = store
+        self.usuario_repo = usuario_repo or FirestoreUsuarioRepository(store)
+
+    @property
+    def store(self):
+        return self._store_inyectado or get_store()
+
+    @staticmethod
+    def _a_documento(solicitud):
+        return {
+            'pasajero_id': a_texto_id(solicitud.pasajero_id),
+            'origen': solicitud.origen,
+            'destino': solicitud.destino,
+            'tarifa_propuesta': a_float(solicitud.tarifa_propuesta),
+            'estado': str(solicitud.estado),
+        }
+
+    def _a_entidad(self, doc_id, datos, *, con_pasajero=True):
+        solicitud = SolicitudViaje(
+            id=a_texto_id(doc_id),
+            pasajero_id=datos.get('pasajero_id'),
+            origen=datos.get('origen', ''),
+            destino=datos.get('destino', ''),
+            tarifa_propuesta=a_decimal(datos.get('tarifa_propuesta')),
+            estado=datos.get('estado', EstadoSolicitud.PENDIENTE),
+        )
+        if con_pasajero and solicitud.pasajero_id:
+            try:
+                solicitud.pasajero = self.usuario_repo.obtener_por_id(
+                    solicitud.pasajero_id,
+                )
+            except UsuarioNoEncontradoError:
+                solicitud.pasajero = None
+        return solicitud
+
+    def crear(self, *, pasajero, origen, destino, tarifa_propuesta):
+        pasajero_id = getattr(pasajero, 'id', pasajero)
+        solicitud = SolicitudViaje(
+            pasajero_id=a_texto_id(pasajero_id),
+            origen=origen,
+            destino=destino,
+            tarifa_propuesta=a_decimal(tarifa_propuesta),
+            estado=EstadoSolicitud.PENDIENTE,
+        )
+        solicitud.pasajero = pasajero if hasattr(pasajero, 'nombre') else None
+        self.store.set(SOLICITUDES, solicitud.id, self._a_documento(solicitud))
+        return solicitud
+
+    def obtener_por_id(self, solicitud_id):
+        solicitud_id = a_texto_id(solicitud_id)
+        datos = self.store.get(SOLICITUDES, solicitud_id)
+        if datos is None:
+            raise SolicitudNoEncontradaError(solicitud_id)
+        return self._a_entidad(solicitud_id, datos)
+
+    def listar_disponibles(self):
+        filtros = [Filtro('estado', 'in', ESTADOS_DISPONIBLES)]
+        return [
+            self._a_entidad(doc_id, datos)
+            for doc_id, datos in self.store.query(SOLICITUDES, filtros)
+        ]
+
+    def listar(self):
+        return [
+            self._a_entidad(doc_id, datos)
+            for doc_id, datos in self.store.query(SOLICITUDES)
+        ]
+
+    def guardar(self, solicitud):
+        self.store.set(SOLICITUDES, solicitud.id, self._a_documento(solicitud))
+        return solicitud
+
+    def eliminar(self, solicitud_id):
+        solicitud_id = a_texto_id(solicitud_id)
+        if self.store.get(SOLICITUDES, solicitud_id) is None:
+            raise SolicitudNoEncontradaError(solicitud_id)
+        self.store.delete(SOLICITUDES, solicitud_id)
+
+    def cerrar_si_disponible(self, solicitud_id, estados_aceptables, nuevo_estado):
+        return self.store.compare_and_set(
+            SOLICITUDES,
+            a_texto_id(solicitud_id),
+            'estado',
+            [str(estado) for estado in estados_aceptables],
+            {'estado': str(nuevo_estado)},
+        )
+
+
+class FirestoreViajeRepository(ViajeRepository):
+    def __init__(self, store=None, usuario_repo=None, mototaxista_repo=None,
+                 solicitud_repo=None):
+        self._store_inyectado = store
+        self.usuario_repo = usuario_repo or FirestoreUsuarioRepository(store)
+        self.mototaxista_repo = mototaxista_repo or FirestoreMototaxistaRepository(store)
+        self.solicitud_repo = solicitud_repo or FirestoreSolicitudViajeRepository(store)
+
+    @property
+    def store(self):
+        return self._store_inyectado or get_store()
+
+    @staticmethod
+    def _a_documento(viaje):
+        return {
+            'solicitud_id': a_texto_id(viaje.solicitud_id),
+            'pasajero_id': a_texto_id(viaje.pasajero_id),
+            'conductor_id': a_texto_id(viaje.conductor_id),
+            'tarifa_final': a_float(viaje.tarifa_final),
+            'estado': str(viaje.estado),
+        }
+
+    def _a_entidad(self, doc_id, datos):
+        viaje = Viaje(
+            id=a_texto_id(doc_id),
+            solicitud_id=datos.get('solicitud_id'),
+            pasajero_id=datos.get('pasajero_id'),
+            conductor_id=datos.get('conductor_id'),
+            tarifa_final=a_decimal(datos.get('tarifa_final')),
+            estado=datos.get('estado', EstadoViaje.ASIGNADO),
+        )
+        # Hidratación equivalente al select_related del ORM: el
+        # ViajeSerializer expone pasajero y conductor anidados.
+        try:
+            viaje.pasajero = self.usuario_repo.obtener_por_id(viaje.pasajero_id)
+        except UsuarioNoEncontradoError:
+            viaje.pasajero = None
+        try:
+            viaje.conductor = self.mototaxista_repo.obtener_por_id(viaje.conductor_id)
+        except MototaxistaNoEncontradoError:
+            viaje.conductor = None
+        return viaje
+
+    def crear(self, *, solicitud, pasajero, conductor, tarifa_final):
+        viaje = Viaje(
+            solicitud_id=a_texto_id(getattr(solicitud, 'id', solicitud)),
+            pasajero_id=a_texto_id(getattr(pasajero, 'id', pasajero)),
+            conductor_id=a_texto_id(getattr(conductor, 'usuario_id', conductor)),
+            tarifa_final=a_decimal(tarifa_final),
+            estado=EstadoViaje.ASIGNADO,
+        )
+        viaje.solicitud = solicitud if hasattr(solicitud, 'origen') else None
+        viaje.pasajero = pasajero if hasattr(pasajero, 'nombre') else None
+        viaje.conductor = conductor if hasattr(conductor, 'placa') else None
+        self.store.set(VIAJES, viaje.id, self._a_documento(viaje))
+        return viaje
+
+    def obtener_por_id(self, viaje_id):
+        viaje_id = a_texto_id(viaje_id)
+        datos = self.store.get(VIAJES, viaje_id)
+        if datos is None:
+            raise ViajeNoEncontradoError(viaje_id)
+        return self._a_entidad(viaje_id, datos)
+
+    def listar(self):
+        return [
+            self._a_entidad(doc_id, datos)
+            for doc_id, datos in self.store.query(VIAJES)
+        ]
+
+    def listar_por_usuario(self, usuario_id, *, estados=None):
+        """Firestore no tiene OR entre campos distintos sin índice
+        compuesto, así que se hacen dos consultas y se unen aquí. El
+        filtro por estado también se aplica en memoria: el resultado por
+        usuario es chico y así no hace falta ningún índice extra."""
+        usuario_id = a_texto_id(usuario_id)
+        if not usuario_id:
+            return []
+
+        encontrados = {}
+        for campo in ('pasajero_id', 'conductor_id'):
+            for doc_id, datos in self.store.query(
+                VIAJES, [Filtro(campo, '==', usuario_id)],
+            ):
+                encontrados[doc_id] = datos
+
+        if estados is not None:
+            aceptables = {str(estado) for estado in estados}
+            encontrados = {
+                doc_id: datos
+                for doc_id, datos in encontrados.items()
+                if datos.get('estado') in aceptables
+            }
+
+        return [self._a_entidad(doc_id, datos) for doc_id, datos in encontrados.items()]
+
+    def guardar(self, viaje):
+        self.store.set(VIAJES, viaje.id, self._a_documento(viaje))
+        return viaje
+
+    def eliminar(self, viaje_id):
+        viaje_id = a_texto_id(viaje_id)
+        if self.store.get(VIAJES, viaje_id) is None:
+            raise ViajeNoEncontradoError(viaje_id)
+        self.store.delete(VIAJES, viaje_id)

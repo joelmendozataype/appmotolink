@@ -21,7 +21,7 @@ lo verificado en ejecución contra el emulador, y
 |---|---|
 | Frontend | Flutter / Dart, `go_router`, `provider`, `socket_io_client`, `geolocator` |
 | Backend | Django 5 + DRF, autenticación por sesión (no JWT), `python-socketio` sobre eventlet (WebSocket real) |
-| Base de datos | SQLite |
+| Base de datos | Cloud Firestore (documental), vía `firebase-admin` |
 | Arquitectura | Clean Architecture (domain / data / presentation) en ambos lados |
 
 ```
@@ -133,11 +133,15 @@ cargando/error/vacío/datos en cada pantalla con listas.
 ```
 backend/
 ├── backend/        → settings.py (config por entorno vía .env), urls.py, wsgi.py
-├── core/            → SesionUsuarioAuthentication, realtime (Socket.IO: server, events, notifier)
+├── core/
+│   ├── firestore/       → puerto DocumentStore + backends (Firestore real, en memoria)
+│   ├── di.py            → composición: qué repositorio concreto usa la app
+│   ├── testing.py       → FirestoreTestCase (store en memoria, sin SQL)
+│   └── realtime/        → Socket.IO: server, events, notifier
 └── <app>/
-    ├── domain/          → Excepciones de negocio (ej. OfertaDuplicadaError)
+    ├── domain/          → entities.py, repositories.py (contratos), exceptions.py
     ├── application/     → usecases/ y services/ (NegotiationService)
-    ├── infrastructure/  → models.py, serializers.py, migrations/, repositories.py
+    ├── infrastructure/  → firestore_repositories.py, serializers.py
     └── presentation/    → views.py (ViewSets DRF), urls.py
 ```
 
@@ -164,8 +168,49 @@ backend/
 ```
 presentation (views DRF)  →  application (usecases/services)  →  domain
                                        ↑
-                               infrastructure (modelos ORM, serializers)
+                    infrastructure (repositorios Firestore, serializers)
 ```
+
+### Modelo de datos en Firestore
+
+Seis colecciones, más dos índices auxiliares. Las relaciones se guardan
+como el id del documento referenciado (`pasajero_id`, `solicitud_id`,
+`conductor_id`), y los repositorios las hidratan al leer — el equivalente
+al `select_related` del ORM.
+
+| Colección | Id del documento | Reemplaza a |
+|---|---|---|
+| `usuarios` | UUID | `users_usuario` |
+| `mototaxistas` | UUID del usuario | `users_mototaxista` |
+| `solicitudes_viaje` | UUID | `trips_solicitudviaje` |
+| `viajes` | UUID | `trips_viaje` |
+| `ofertas` | `<solicitud_id>__<conductor_id>` | `negotiation_oferta` |
+| `calificaciones` | UUID | `ratings_calificacion` |
+| `correos_usuario` | el correo en minúsculas | `UNIQUE(correo)` |
+| `calificaciones_por_viaje` | UUID del viaje | `OneToOneField(viaje)` |
+
+### Garantías que ya no da el motor, y cómo se reponen
+
+Firestore no tiene UNIQUE, FOREIGN KEY ni transacciones SQL. Las tres
+invariantes del dominio se sostienen así:
+
+| Invariante | Antes (SQLite) | Ahora (Firestore) |
+|---|---|---|
+| Un conductor responde una sola vez por solicitud | `UNIQUE(solicitud, conductor)` | Id de documento determinista + `create()`, que falla si ya existe |
+| Un correo, un usuario | `UNIQUE(correo)` | Colección `correos_usuario`, donde el id ES el correo |
+| Una calificación por viaje | `OneToOneField` | Colección `calificaciones_por_viaje` |
+| Solo una selección cierra la solicitud | Transacción | `compare_and_set` sobre `estado` (transacción de Firestore) |
+| Puntuación entre 1 y 5 | CHECK a medias (`>= 0`) + validador | Invariante de la entidad `Calificacion` |
+
+### Por qué hay un puerto `DocumentStore`
+
+Los repositorios no hablan con `google.cloud.firestore` directamente,
+sino con una interfaz de siete métodos (`core/firestore/port.py`). El SDK
+de Firebase queda confinado a `firebase_store.py`, y existe una segunda
+implementación en memoria (`memory.py`) que permite correr las 28 pruebas
+sin credenciales, sin red y sin base de datos SQL — `FirestoreTestCase`
+hereda de `SimpleTestCase`, que prohíbe el acceso al ORM, así que una
+regresión hacia SQL rompe los tests en vez de pasar inadvertida.
 
 ---
 

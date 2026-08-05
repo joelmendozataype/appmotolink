@@ -6,8 +6,7 @@ from negotiation.application.usecases import (
     ListarOfertasParaPasajeroUseCase,
     SeleccionarConductorUseCase,
 )
-from negotiation.infrastructure.repositories import DjangoOfertaRepository
-from trips.infrastructure.repositories import DjangoSolicitudViajeRepository, DjangoViajeRepository
+from core import di
 
 
 class NegotiationService:
@@ -16,9 +15,9 @@ class NegotiationService:
     notifica los eventos en tiempo real correspondientes."""
 
     def __init__(self, oferta_repo=None, solicitud_repo=None, viaje_repo=None, notifier=None):
-        self.oferta_repo = oferta_repo or DjangoOfertaRepository()
-        self.solicitud_repo = solicitud_repo or DjangoSolicitudViajeRepository()
-        self.viaje_repo = viaje_repo or DjangoViajeRepository()
+        self.oferta_repo = oferta_repo or di.oferta_repo()
+        self.solicitud_repo = solicitud_repo or di.solicitud_repo()
+        self.viaje_repo = viaje_repo or di.viaje_repo()
         self.notifier = notifier or SocketIORealtimeNotifier()
 
     def aceptar(self, *, solicitud_id, conductor):

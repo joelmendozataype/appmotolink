@@ -1,20 +1,32 @@
+"""Serializers de solicitudes y viajes.
+
+`pasajero` y `solicitud` siguen saliendo como el id plano (igual que la
+PrimaryKeyRelatedField del ModelSerializer anterior); `source` los
+conecta con los campos `*_id` de las entidades.
+"""
 from rest_framework import serializers
+
+from trips.domain.entities import EstadoSolicitud, EstadoViaje
 from users.infrastructure.serializers import MototaxistaSerializer, UsuarioSerializer
 
-from .models import SolicitudViaje, Viaje
+
+class SolicitudViajeSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True)
+    pasajero = serializers.CharField(source='pasajero_id')
+    origen = serializers.CharField(max_length=255)
+    destino = serializers.CharField(max_length=255)
+    tarifa_propuesta = serializers.DecimalField(max_digits=8, decimal_places=2)
+    estado = serializers.ChoiceField(
+        choices=EstadoSolicitud.valores(), read_only=True,
+    )
 
 
-class SolicitudViajeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SolicitudViaje
-        fields = ['id', 'pasajero', 'origen', 'destino', 'tarifa_propuesta', 'estado']
-        read_only_fields = ['estado']
-
-
-class ViajeSerializer(serializers.ModelSerializer):
+class ViajeSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True)
+    solicitud = serializers.CharField(source='solicitud_id', read_only=True)
     pasajero = UsuarioSerializer(read_only=True)
     conductor = MototaxistaSerializer(read_only=True)
-
-    class Meta:
-        model = Viaje
-        fields = ['id', 'solicitud', 'pasajero', 'conductor', 'tarifa_final', 'estado']
+    tarifa_final = serializers.DecimalField(
+        max_digits=8, decimal_places=2, read_only=True,
+    )
+    estado = serializers.ChoiceField(choices=EstadoViaje.valores(), read_only=True)

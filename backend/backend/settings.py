@@ -113,8 +113,15 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+# Base de datos
+#
+# Los datos de MotoLink (usuarios, mototaxistas, solicitudes, viajes,
+# ofertas y calificaciones) viven en Cloud Firestore, no aquí. El acceso
+# va por los repositorios de core.firestore; ver core/di.py.
+#
+# La entrada 'default' queda solo para la infraestructura del propio
+# Django (admin, auth, contenttypes). Ninguna petición de la API la toca:
+# las sesiones se firman en cookie (SESSION_ENGINE, más abajo).
 
 DATABASES = {
     'default': {
@@ -122,6 +129,21 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# Backend de documentos: 'firestore' (producción y desarrollo normal) o
+# 'memory' (tests y demos sin credenciales). Ver core/firestore/registry.py.
+MOTOLINK_DB_BACKEND = os.environ.get('MOTOLINK_DB_BACKEND', 'firestore')
+os.environ.setdefault('MOTOLINK_DB_BACKEND', MOTOLINK_DB_BACKEND)
+
+# Credencial del Admin SDK. Es un secreto real: nunca se versiona.
+# Descargarla en la consola de Firebase > Configuración del proyecto >
+# Cuentas de servicio > Generar nueva clave privada.
+FIREBASE_CREDENTIALS_FILE = os.environ.get('FIREBASE_CREDENTIALS_FILE', '')
+FIREBASE_PROJECT_ID = os.environ.get('FIREBASE_PROJECT_ID', '')
+
+# Sesiones firmadas en cookie: no necesitan tabla django_session, así que
+# el login tampoco depende de SQL.
+SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
 
 
 # Password validation

@@ -1,41 +1,33 @@
-from django.test import TestCase
 from rest_framework.test import APIClient
 
-from trips.infrastructure.models import SolicitudViaje
-from users.infrastructure.models import Mototaxista, RolUsuario, Usuario
+from core.testing import FirestoreTestCase
 
 
-class ConcurrenciaNegociacionTests(TestCase):
+class ConcurrenciaNegociacionTests(FirestoreTestCase):
     """Casos donde dos conductores compiten por la misma solicitud, y
     entradas inválidas/inexistentes que deben fallar de forma controlada
-    en vez de romper el servidor."""
+    en vez de romper el servidor.
+
+    Sobre Firestore las garantías vienen de dos primitivas en vez de una
+    transacción SQL: el id determinista de la oferta (una por conductor y
+    solicitud) y el cambio de estado condicional al cerrar la solicitud.
+    """
 
     def setUp(self):
+        super().setUp()
         self.client = APIClient()
-        self.pasajero = Usuario.objects.create(
+        self.pasajero = self.crear_usuario(
             nombre='Pasajero Test', correo='pasajero.conc@motolink.com',
-            rol=RolUsuario.PASAJERO,
         )
-        self.solicitud = SolicitudViaje.objects.create(
-            pasajero=self.pasajero, origen='A', destino='B',
-            tarifa_propuesta=10.0, estado='pendiente',
-        )
+        self.solicitud = self.crear_solicitud(pasajero=self.pasajero, tarifa=10)
 
-        usuario_a = Usuario.objects.create(
+        self.conductor_a = self.crear_mototaxista(
             nombre='Conductor A', correo='conductor.a@motolink.com',
-            rol=RolUsuario.MOTOTAXISTA,
+            licencia='LIC-A', placa='AAA-001',
         )
-        self.conductor_a = Mototaxista.objects.create(
-            usuario=usuario_a, licencia='LIC-A', placa='AAA-001',
-            marca_vehiculo='Honda', modelo_vehiculo='Wave',
-        )
-        usuario_b = Usuario.objects.create(
+        self.conductor_b = self.crear_mototaxista(
             nombre='Conductor B', correo='conductor.b@motolink.com',
-            rol=RolUsuario.MOTOTAXISTA,
-        )
-        self.conductor_b = Mototaxista.objects.create(
-            usuario=usuario_b, licencia='LIC-B', placa='BBB-002',
-            marca_vehiculo='Yamaha', modelo_vehiculo='Crypton',
+            licencia='LIC-B', placa='BBB-002', marca='Yamaha', modelo='Crypton',
         )
 
     def test_dos_conductores_responden_y_solo_uno_es_seleccionable(self):
@@ -67,22 +59,44 @@ class ConcurrenciaNegociacionTests(TestCase):
         )
         self.assertEqual(intento_tardio.status_code, 409)
 
+    def test_seleccionar_la_misma_oferta_dos_veces_devuelve_409(self):
+        """Doble tap del pasajero: la segunda selección no debe crear un
+        segundo viaje para la misma solicitud."""
+        oferta = self.client.post(
+            f'/api/solicitudes-viaje/{self.solicitud.id}/aceptar/',
+            {'conductor_id': str(self.conductor_a.usuario_id)}, format='json',
+        ).data
+
+        primera = self.client.post(f"/api/ofertas/{oferta['id']}/seleccionar/")
+        self.assertEqual(primera.status_code, 201)
+
+        segunda = self.client.post(f"/api/ofertas/{oferta['id']}/seleccionar/")
+        self.assertEqual(segunda.status_code, 409)
+
+        viajes = self.viajes.listar_por_usuario(self.pasajero.id)
+        self.assertEqual(len(viajes), 1)
+
     def test_seleccionar_oferta_inexistente_devuelve_404_no_500(self):
-        """Bug real encontrado por esta prueba: seleccionar un UUID de
-        oferta que no existe lanzaba un 500 sin manejar (el repositorio
-        usa `.get()`, que levanta DoesNotExist). Corregido para devolver
-        404 controlado — ver negotiation/presentation/views.py."""
-        uuid_inexistente = '00000000-0000-0000-0000-000000000000'
+        """Bug real encontrado por esta prueba: seleccionar un id de
+        oferta que no existe lanzaba un 500 sin manejar. Corregido para
+        devolver 404 controlado — ver negotiation/presentation/views.py."""
         respuesta = self.client.post(
-            f'/api/ofertas/{uuid_inexistente}/seleccionar/',
+            '/api/ofertas/00000000-0000-0000-0000-000000000000/seleccionar/',
         )
         self.assertEqual(respuesta.status_code, 404)
         self.assertIn('detail', respuesta.data)
 
     def test_aceptar_con_solicitud_inexistente_devuelve_404_no_500(self):
-        uuid_inexistente = '00000000-0000-0000-0000-000000000000'
         respuesta = self.client.post(
-            f'/api/solicitudes-viaje/{uuid_inexistente}/aceptar/',
+            '/api/solicitudes-viaje/00000000-0000-0000-0000-000000000000/aceptar/',
             {'conductor_id': str(self.conductor_a.usuario_id)}, format='json',
+        )
+        self.assertEqual(respuesta.status_code, 404)
+
+    def test_aceptar_con_conductor_inexistente_devuelve_404(self):
+        respuesta = self.client.post(
+            f'/api/solicitudes-viaje/{self.solicitud.id}/aceptar/',
+            {'conductor_id': '00000000-0000-0000-0000-000000000000'},
+            format='json',
         )
         self.assertEqual(respuesta.status_code, 404)

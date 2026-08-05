@@ -1,34 +1,25 @@
-from django.test import TestCase
 from rest_framework.test import APIClient
 
-from trips.infrastructure.models import SolicitudViaje, Viaje
-from users.infrastructure.models import Mototaxista, RolUsuario, Usuario
+from core.testing import FirestoreTestCase
+from trips.domain.entities import EstadoSolicitud
 
 
-class FlujoNegociacionTests(TestCase):
+class FlujoNegociacionTests(FirestoreTestCase):
     """Cubre el flujo completo de negociación end-to-end vía API REST:
     crear solicitud -> aceptar -> ver ofertas -> seleccionar -> viaje
     asignado -> finalizar -> calificar. Mismo flujo verificado manualmente
     contra el emulador durante el desarrollo."""
 
     def setUp(self):
+        super().setUp()
         self.client = APIClient()
-        self.pasajero = Usuario.objects.create(
+        self.pasajero = self.crear_usuario(
             nombre='Pasajero Test', correo='pasajero.test@motolink.com',
-            rol=RolUsuario.PASAJERO,
+            contrasena='clave123',
         )
-        self.pasajero.set_password('clave123')
-        self.pasajero.save()
-
-        usuario_conductor = Usuario.objects.create(
+        self.conductor = self.crear_mototaxista(
             nombre='Conductor Test', correo='conductor.test@motolink.com',
-            rol=RolUsuario.MOTOTAXISTA,
-        )
-        usuario_conductor.set_password('clave123')
-        usuario_conductor.save()
-        self.conductor = Mototaxista.objects.create(
-            usuario=usuario_conductor, licencia='LIC-TEST', placa='TST-001',
-            marca_vehiculo='Honda', modelo_vehiculo='Wave',
+            licencia='LIC-TEST', placa='TST-001',
         )
 
     def _crear_solicitud(self, tarifa=10.0):
@@ -61,8 +52,8 @@ class FlujoNegociacionTests(TestCase):
         self.assertEqual(float(oferta['tarifa']), 10.0)
 
         # La solicitud pasó a "en negociación" al recibir la primera respuesta.
-        solicitud_actualizada = SolicitudViaje.objects.get(id=solicitud['id'])
-        self.assertEqual(solicitud_actualizada.estado, 'enNegociacion')
+        solicitud_actualizada = self.solicitudes.obtener_por_id(solicitud['id'])
+        self.assertEqual(solicitud_actualizada.estado, EstadoSolicitud.EN_NEGOCIACION)
 
         # El pasajero ve la oferta pendiente.
         respuesta = self.client.get(
@@ -78,9 +69,9 @@ class FlujoNegociacionTests(TestCase):
         self.assertEqual(viaje['estado'], 'asignado')
         self.assertEqual(float(viaje['tarifa_final']), 10.0)
 
-        viaje_db = Viaje.objects.get(id=viaje['id'])
-        self.assertEqual(viaje_db.pasajero_id, self.pasajero.id)
-        self.assertEqual(viaje_db.conductor_id, self.conductor.usuario_id)
+        viaje_guardado = self.viajes.obtener_por_id(viaje['id'])
+        self.assertEqual(viaje_guardado.pasajero_id, self.pasajero.id)
+        self.assertEqual(viaje_guardado.conductor_id, self.conductor.usuario_id)
 
         # Finalizar el viaje.
         respuesta = self.client.put(f"/api/viajes/{viaje['id']}/finalizar/")
@@ -159,13 +150,9 @@ class FlujoNegociacionTests(TestCase):
         self.client.post(f"/api/ofertas/{oferta['id']}/seleccionar/")
 
         # Otro conductor (otro usuario) intenta responder tarde.
-        otro_usuario = Usuario.objects.create(
+        otro_conductor = self.crear_mototaxista(
             nombre='Otro Conductor', correo='otro.conductor@motolink.com',
-            rol=RolUsuario.MOTOTAXISTA,
-        )
-        otro_conductor = Mototaxista.objects.create(
-            usuario=otro_usuario, licencia='LIC-2', placa='TST-002',
-            marca_vehiculo='Yamaha', modelo_vehiculo='Crypton',
+            licencia='LIC-2', placa='TST-002', marca='Yamaha', modelo='Crypton',
         )
         respuesta = self.client.post(
             f"/api/solicitudes-viaje/{solicitud['id']}/aceptar/",

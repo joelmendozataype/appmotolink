@@ -1,0 +1,26 @@
+rules_version = '2';
+
+// Reglas de seguridad de Firestore para MotoLink.
+//
+// Todo el acceso a los datos pasa por el backend Django usando el Admin
+// SDK, y el Admin SDK NO evalúa estas reglas: las omite por diseño. Por
+// eso la postura correcta aquí es denegar absolutamente todo acceso
+// directo desde clientes (la app Flutter, la consola web, cualquier SDK
+// de cliente). Si un día se abriera un cliente directo a Firestore,
+// estas reglas son el punto donde se define quién puede leer qué.
+//
+// Desplegar con:  firebase deploy --only firestore:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Colecciones de MotoLink: usuarios, mototaxistas, solicitudes_viaje,
+    // viajes, ofertas, calificaciones, y los índices auxiliares
+    // correos_usuario y calificaciones_por_viaje.
+    //
+    // Denegado para clientes. El backend entra con cuenta de servicio.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

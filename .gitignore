@@ -7,6 +7,12 @@ backend/db.sqlite3
 backend/*.log
 backend/.env
 
+# Credenciales de Firebase (Admin SDK). Son secretos reales: la clave
+# privada de la cuenta de servicio da acceso total a Firestore.
+**/serviceAccount*.json
+**/*service-account*.json
+**/*firebase-adminsdk*.json
+
 # Flutter (ver también mobile/.gitignore)
 mobile/build/
 mobile/.dart_tool/

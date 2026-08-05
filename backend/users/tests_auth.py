@@ -1,22 +1,21 @@
-from django.test import TestCase
 from rest_framework.test import APIClient
 
-from users.infrastructure.models import RolUsuario, Usuario
+from core.testing import FirestoreTestCase
+from users.domain.entities import RolUsuario
 
 
-class SesionAuthTests(TestCase):
+class SesionAuthTests(FirestoreTestCase):
     """Cubre la persistencia de sesión tras el login: /me, logout, y que
     las acciones protegidas exijan sesión activa (no JWT, autenticación
-    propia por cookie de sesión Django, ver core.authentication)."""
+    propia por cookie de sesión firmada, ver core.authentication)."""
 
     def setUp(self):
+        super().setUp()
         self.client = APIClient()
-        self.usuario = Usuario.objects.create(
+        self.usuario = self.crear_usuario(
             nombre='Ana Torres', correo='ana.auth@motolink.com',
-            rol=RolUsuario.PASAJERO,
+            rol=RolUsuario.PASAJERO, contrasena='clave123',
         )
-        self.usuario.set_password('clave123')
-        self.usuario.save()
 
     def _login(self):
         return self.client.post(
@@ -45,18 +44,12 @@ class SesionAuthTests(TestCase):
 
         # Sin sesión, /me vuelve a exigir autenticación.
         respuesta = self.client.get('/api/usuarios/me/')
-        # DRF responde 403 (no 401) porque SesionUsuarioAuthentication no
-        # define authenticate_header; es el comportamiento estándar, no
-        # un caso de WWW-Authenticate.
         self.assertEqual(respuesta.status_code, 403)
 
     def test_usuario_inactivo_no_puede_autenticarse_via_me(self):
         self._login()
         self.usuario.is_active = False
-        self.usuario.save()
+        self.usuarios.guardar(self.usuario)
 
         respuesta = self.client.get('/api/usuarios/me/')
-        # DRF responde 403 (no 401) porque SesionUsuarioAuthentication no
-        # define authenticate_header; es el comportamiento estándar, no
-        # un caso de WWW-Authenticate.
         self.assertEqual(respuesta.status_code, 403)

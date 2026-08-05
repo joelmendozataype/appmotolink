@@ -1,14 +1,15 @@
-from django.test import TestCase
 from rest_framework.test import APIClient
 
-from users.infrastructure.models import Mototaxista, RolUsuario, Usuario
+from core.testing import FirestoreTestCase
+from users.domain.entities import RolUsuario
 
 
-class LoginRegistroTests(TestCase):
+class LoginRegistroTests(FirestoreTestCase):
     """Cubre el flujo de autenticación real contra el backend: registro,
     login con credenciales correctas/incorrectas y persistencia de sesión."""
 
     def setUp(self):
+        super().setUp()
         self.client = APIClient()
 
     def test_registro_pasajero_no_admite_correo_duplicado(self):
@@ -23,11 +24,10 @@ class LoginRegistroTests(TestCase):
         self.assertEqual(segunda.status_code, 400)
 
     def test_login_con_credenciales_correctas(self):
-        usuario = Usuario.objects.create(
-            nombre='Ana Torres', correo='ana@motolink.com', rol=RolUsuario.PASAJERO,
+        self.crear_usuario(
+            nombre='Ana Torres', correo='ana@motolink.com',
+            rol=RolUsuario.PASAJERO, contrasena='clave123',
         )
-        usuario.set_password('clave123')
-        usuario.save()
 
         respuesta = self.client.post(
             '/api/usuarios/login/',
@@ -40,11 +40,10 @@ class LoginRegistroTests(TestCase):
         self.assertNotIn('contrasena', respuesta.data)
 
     def test_login_con_contrasena_incorrecta_es_rechazado(self):
-        usuario = Usuario.objects.create(
-            nombre='Ana Torres', correo='ana@motolink.com', rol=RolUsuario.PASAJERO,
+        self.crear_usuario(
+            nombre='Ana Torres', correo='ana@motolink.com',
+            rol=RolUsuario.PASAJERO, contrasena='clave123',
         )
-        usuario.set_password('clave123')
-        usuario.save()
 
         respuesta = self.client.post(
             '/api/usuarios/login/',
@@ -53,16 +52,26 @@ class LoginRegistroTests(TestCase):
         )
         self.assertEqual(respuesta.status_code, 401)
 
+    def test_login_es_insensible_a_mayusculas_en_el_correo(self):
+        """El índice de correos se normaliza en minúsculas, así que el
+        correo se comporta igual que con el UNIQUE de SQLite."""
+        self.crear_usuario(
+            nombre='Ana Torres', correo='ana@motolink.com',
+            rol=RolUsuario.PASAJERO, contrasena='clave123',
+        )
+
+        respuesta = self.client.post(
+            '/api/usuarios/login/',
+            {'correo': 'ANA@Motolink.com', 'contrasena': 'clave123'},
+            format='json',
+        )
+        self.assertEqual(respuesta.status_code, 200)
+
     def test_listado_de_pasajeros_excluye_otros_roles(self):
-        Usuario.objects.create(
-            nombre='Pasajero Uno', correo='p1@motolink.com', rol=RolUsuario.PASAJERO,
-        )
-        usuario_conductor = Usuario.objects.create(
-            nombre='Conductor Uno', correo='c1@motolink.com', rol=RolUsuario.MOTOTAXISTA,
-        )
-        Mototaxista.objects.create(
-            usuario=usuario_conductor, licencia='LIC-1', placa='AAA-111',
-            marca_vehiculo='Honda', modelo_vehiculo='Wave',
+        self.crear_usuario(nombre='Pasajero Uno', correo='p1@motolink.com')
+        self.crear_mototaxista(
+            nombre='Conductor Uno', correo='c1@motolink.com',
+            licencia='LIC-1', placa='AAA-111',
         )
 
         respuesta = self.client.get('/api/usuarios/pasajeros/')
@@ -82,9 +91,7 @@ class LoginRegistroTests(TestCase):
         }
         respuesta = self.client.post('/api/mototaxistas/', payload, format='json')
         self.assertEqual(respuesta.status_code, 201)
-        self.assertTrue(
-            Usuario.objects.filter(correo='luis@motolink.com').exists(),
-        )
-        self.assertTrue(
-            Mototaxista.objects.filter(placa='XYZ-999').exists(),
-        )
+
+        self.assertIsNotNone(self.usuarios.buscar_por_correo('luis@motolink.com'))
+        placas = [m.placa for m in self.mototaxistas.listar()]
+        self.assertIn('XYZ-999', placas)

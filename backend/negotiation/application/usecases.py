@@ -3,17 +3,26 @@ from negotiation.domain.exceptions import (
     OfertaNoDisponibleError,
     SolicitudNoDisponibleError,
 )
-from negotiation.infrastructure.models import EstadoOferta, TipoOferta
-from trips.infrastructure.models import EstadoSolicitud
+from negotiation.domain.entities import EstadoOferta, TipoOferta
+from trips.domain.entities import EstadoSolicitud
+from trips.domain.repositories import SolicitudNoEncontradaError
 
 SOLICITUD_RESPONDIBLE = (EstadoSolicitud.PENDIENTE, EstadoSolicitud.EN_NEGOCIACION)
 
 
 def _abrir_negociacion(solicitud, solicitud_repo):
-    """Al llegar la primera respuesta, la solicitud pasa a 'en negociación'."""
-    if solicitud.estado == EstadoSolicitud.PENDIENTE:
+    """Al llegar la primera respuesta, la solicitud pasa a 'en negociación'.
+
+    Se hace con el cambio de estado condicional en vez de un guardar()
+    completo: si entre medias la solicitud ya fue aceptada o cancelada,
+    esta transición simplemente no se aplica en lugar de pisarla.
+    """
+    if solicitud.estado != EstadoSolicitud.PENDIENTE:
+        return
+    if solicitud_repo.cerrar_si_disponible(
+        solicitud.id, [EstadoSolicitud.PENDIENTE], EstadoSolicitud.EN_NEGOCIACION,
+    ):
         solicitud.estado = EstadoSolicitud.EN_NEGOCIACION
-        solicitud_repo.guardar(solicitud)
 
 
 class ConductorAceptarSolicitudUseCase:
@@ -121,24 +130,37 @@ class SeleccionarConductorUseCase:
 
     def execute(self, *, oferta_id):
         oferta = self.oferta_repo.obtener_por_id(oferta_id)
-        if oferta.estado != EstadoOferta.PENDIENTE:
-            raise OfertaNoDisponibleError
-
         solicitud = oferta.solicitud
-        if solicitud.estado not in SOLICITUD_RESPONDIBLE:
+        if solicitud is None:
+            # La oferta apunta a una solicitud que ya no existe.
+            raise SolicitudNoEncontradaError(oferta.solicitud_id)
+
+        # Se cierra la solicitud primero y de forma atómica: es el recurso
+        # por el que compiten las selecciones concurrentes. Si otro
+        # pasajero (o un doble tap) llegó antes, aquí se corta.
+        if not self.solicitud_repo.cerrar_si_disponible(
+            solicitud.id, SOLICITUD_RESPONDIBLE, EstadoSolicitud.ACEPTADA,
+        ):
             raise SolicitudNoDisponibleError
 
-        oferta.estado = EstadoOferta.ACEPTADA
-        self.oferta_repo.guardar(oferta)
-        self.oferta_repo.rechazar_otras(solicitud.id, oferta.id)
+        # La solicitud ya es nuestra; ahora la oferta elegida debe seguir
+        # pendiente (no haber sido rechazada entre medias).
+        if not self.oferta_repo.aceptar_si_pendiente(oferta.id):
+            # Se devuelve la solicitud a negociación para no dejarla
+            # cerrada sin viaje asignado.
+            self.solicitud_repo.cerrar_si_disponible(
+                solicitud.id, [EstadoSolicitud.ACEPTADA], EstadoSolicitud.EN_NEGOCIACION,
+            )
+            raise OfertaNoDisponibleError
 
+        oferta.estado = EstadoOferta.ACEPTADA
         solicitud.estado = EstadoSolicitud.ACEPTADA
-        self.solicitud_repo.guardar(solicitud)
+        self.oferta_repo.rechazar_otras(solicitud.id, oferta.id)
 
         viaje = self.viaje_repo.crear(
             solicitud=solicitud,
-            pasajero=solicitud.pasajero,
-            conductor=oferta.conductor,
+            pasajero=solicitud.pasajero or solicitud.pasajero_id,
+            conductor=oferta.conductor or oferta.conductor_id,
             tarifa_final=oferta.tarifa,
         )
 

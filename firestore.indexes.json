@@ -1,0 +1,27 @@
+{
+  "//": [
+    "Índices de Firestore para MotoLink.",
+    "",
+    "No hace falta ningún índice compuesto: todas las consultas del",
+    "backend filtran por un solo campo, y Firestore ya crea índices de",
+    "campo único automáticamente.",
+    "",
+    "  solicitudes_viaje  estado in ['pendiente','enNegociacion']",
+    "  ofertas            solicitud_id == X   /   estado == 'pendiente'",
+    "  viajes             pasajero_id == X    /   conductor_id == X",
+    "  usuarios           rol == X",
+    "  calificaciones     viaje_id == X",
+    "",
+    "El listado de ofertas por solicitud sí combina dos igualdades",
+    "(solicitud_id y estado); Firestore lo resuelve por intersección de",
+    "índices de campo único, sin índice compuesto.",
+    "",
+    "El filtro de viajes por usuario+estado se hace en memoria a",
+    "propósito (ver FirestoreViajeRepository.listar_por_usuario): el",
+    "conjunto por usuario es pequeño y así no se necesita índice extra.",
+    "",
+    "Desplegar con: firebase deploy --only firestore:indexes"
+  ],
+  "indexes": [],
+  "fieldOverrides": []
+}

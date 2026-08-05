@@ -1,34 +1,47 @@
-from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ViewSet
 
+from core import di
 from negotiation.application.services import NegotiationService
-from negotiation.domain.exceptions import OfertaNoDisponibleError, SolicitudNoDisponibleError
-from negotiation.infrastructure.models import EstadoOferta, Oferta
+from negotiation.domain.exceptions import (
+    OfertaNoDisponibleError,
+    SolicitudNoDisponibleError,
+)
+from negotiation.domain.repositories import OfertaNoEncontradaError
 from negotiation.infrastructure.serializers import OfertaSerializer
+from trips.domain.repositories import SolicitudNoEncontradaError
 from trips.infrastructure.serializers import ViajeSerializer
 
 
-class OfertaViewSet(ModelViewSet):
-    queryset = Oferta.objects.all()
+class OfertaViewSet(ViewSet):
     serializer_class = OfertaSerializer
-    http_method_names = ['get', 'post']
 
-    def get_queryset(self):
-        queryset = Oferta.objects.filter(estado=EstadoOferta.PENDIENTE)
-        solicitud_id = self.request.query_params.get('solicitudId')
+    def list(self, request):
+        repo = di.oferta_repo()
+        solicitud_id = request.query_params.get('solicitudId')
         if solicitud_id:
-            queryset = queryset.filter(solicitud_id=solicitud_id)
-        return queryset
+            ofertas = repo.listar_por_solicitud(solicitud_id, solo_pendientes=True)
+        else:
+            ofertas = repo.listar_pendientes()
+        return Response(OfertaSerializer(ofertas, many=True).data)
+
+    def retrieve(self, request, pk=None):
+        try:
+            oferta = di.oferta_repo().obtener_por_id(pk)
+        except OfertaNoEncontradaError:
+            return Response(
+                {'detail': 'La oferta no existe'}, status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(OfertaSerializer(oferta).data)
 
     @action(detail=True, methods=['post'])
     def seleccionar(self, request, pk=None):
         """6-7. El pasajero selecciona esta oferta: el viaje queda asignado."""
         try:
             viaje = NegotiationService().seleccionar_conductor(oferta_id=pk)
-        except ObjectDoesNotExist:
+        except (OfertaNoEncontradaError, SolicitudNoEncontradaError):
             return Response(
                 {'detail': 'La oferta no existe'}, status=status.HTTP_404_NOT_FOUND,
             )
