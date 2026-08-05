@@ -99,21 +99,39 @@ class FirestoreOfertaRepository(OfertaRepository):
             raise OfertaNoEncontradaError(oferta_id)
         return self._a_entidad(oferta_id, datos)
 
+    def _hidratar(self, documentos):
+        """Sin esto, cada oferta costaba cuatro lecturas sueltas: su
+        conductor, el usuario del conductor, su solicitud y el pasajero de
+        esa solicitud. En lote son cuatro para la lista entera."""
+        documentos = list(documentos)
+        ofertas = [
+            self._a_entidad(doc_id, datos, hidratar=False)
+            for doc_id, datos in documentos
+        ]
+        conductores = self.mototaxista_repo.obtener_varios(
+            [o.conductor_id for o in ofertas],
+        )
+        # Sin el pasajero de cada solicitud: el OfertaSerializer solo
+        # expone el id de la solicitud, así que hidratarlo sería un viaje
+        # de red por gusto. La ruta de selección usa obtener_por_id, que
+        # sí lo trae.
+        solicitudes = self.solicitud_repo.obtener_varias(
+            [o.solicitud_id for o in ofertas], con_pasajero=False,
+        )
+        for oferta in ofertas:
+            oferta.conductor = conductores.get(a_texto_id(oferta.conductor_id))
+            oferta.solicitud = solicitudes.get(a_texto_id(oferta.solicitud_id))
+        return ofertas
+
     def listar_por_solicitud(self, solicitud_id, *, solo_pendientes=True):
         filtros = [Filtro('solicitud_id', '==', a_texto_id(solicitud_id))]
         if solo_pendientes:
             filtros.append(Filtro('estado', '==', str(EstadoOferta.PENDIENTE)))
-        return [
-            self._a_entidad(doc_id, datos)
-            for doc_id, datos in self.store.query(OFERTAS, filtros)
-        ]
+        return self._hidratar(self.store.query(OFERTAS, filtros))
 
     def listar_pendientes(self):
         filtros = [Filtro('estado', '==', str(EstadoOferta.PENDIENTE))]
-        return [
-            self._a_entidad(doc_id, datos)
-            for doc_id, datos in self.store.query(OFERTAS, filtros)
-        ]
+        return self._hidratar(self.store.query(OFERTAS, filtros))
 
     def buscar_de_conductor(self, solicitud_id, conductor_id):
         # Con el id determinista esto es una lectura directa, no una query.

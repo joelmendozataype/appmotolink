@@ -202,6 +202,35 @@ invariantes del dominio se sostienen así:
 | Solo una selección cierra la solicitud | Transacción | `compare_and_set` sobre `estado` (transacción de Firestore) |
 | Puntuación entre 1 y 5 | CHECK a medias (`>= 0`) + validador | Invariante de la entidad `Calificacion` |
 
+### Firestore y el tiempo real: por qué se fue eventlet
+
+`run_realtime.py` usaba `eventlet.monkey_patch()`. Eso es incompatible
+con el SDK de Firestore, que habla **gRPC**: su núcleo está en C y maneja
+sus propios sockets e hilos, fuera del alcance del parcheo de eventlet.
+El síntoma es traicionero — el servidor acepta la conexión TCP y no
+responde nunca; no hay excepción ni log. Sacar la llamada a un hilo con
+`eventlet.tpool` tampoco lo resuelve.
+
+Además, `socketio.Server()` sin `async_mode` autodetecta, y elegía
+eventlet por el solo hecho de estar instalado, aunque nadie llamara a
+`monkey_patch()`.
+
+Solución: `async_mode='threading'` explícito y servidor WSGI con hilos
+(Werkzeug en desarrollo; gunicorn `--worker-class gthread`, waitress o
+uWSGI en producción). Los WebSockets reales los provee `simple-websocket`.
+
+### El N+1 y la hidratación por lote
+
+Firestore cobra y tarda por lectura, así que hidratar relaciones de a una
+es carísimo: listar 22 solicitudes tardaba **26 s** y listar 8 ofertas
+**22 s** (cada oferta necesita conductor, usuario del conductor,
+solicitud y pasajero de la solicitud).
+
+`DocumentStore.get_many()` agrupa esas lecturas en una sola llamada
+`BatchGetDocuments`, y cada repositorio tiene un `_hidratar()` que la usa
+para toda la lista de golpe. Los mismos endpoints quedaron en **1,2 s** y
+**2,3 s**. Es el equivalente al `select_related` que daba el ORM.
+
 ### Por qué hay un puerto `DocumentStore`
 
 Los repositorios no hablan con `google.cloud.firestore` directamente,

@@ -46,6 +46,16 @@ class DocumentStore(ABC):
         """Devuelve el documento como dict, o None si no existe."""
 
     @abstractmethod
+    def get_many(self, coleccion, doc_ids):
+        """Lee varios documentos de una sola vez.
+
+        Devuelve {doc_id: datos} omitiendo los que no existan. Es el
+        reemplazo del `select_related` del ORM: sin esto, hidratar una
+        lista de N elementos costaría N lecturas sueltas (N+1), que
+        contra Firestore se traduce en N viajes de red.
+        """
+
+    @abstractmethod
     def set(self, coleccion, doc_id, datos):
         """Escribe el documento completo (crea o reemplaza)."""
 

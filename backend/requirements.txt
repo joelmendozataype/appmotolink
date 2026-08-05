@@ -1,7 +1,14 @@
 Django==5.2.15
 djangorestframework==3.17.1
 python-socketio==5.16.3
-eventlet==0.41.0
 python-dotenv==1.2.2
 django-cors-headers==4.7.0
 firebase-admin==7.1.0
+
+# Tiempo real en modo 'threading'. Reemplazan a eventlet, que es
+# incompatible con el gRPC del SDK de Firestore: con eventlet
+# monkey-patcheado la primera consulta se cuelga para siempre.
+# Werkzeug aporta el servidor WSGI con hilos de desarrollo y
+# simple-websocket el upgrade real de WebSocket.
+Werkzeug==3.1.8
+simple-websocket==1.1.0

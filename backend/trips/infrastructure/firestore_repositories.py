@@ -81,18 +81,38 @@ class FirestoreSolicitudViajeRepository(SolicitudViajeRepository):
             raise SolicitudNoEncontradaError(solicitud_id)
         return self._a_entidad(solicitud_id, datos)
 
+    def _hidratar(self, documentos, *, con_pasajero=True):
+        """Hidrata los pasajeros de una lista con una sola lectura por lote
+        (equivalente al select_related del ORM)."""
+        documentos = list(documentos)
+        solicitudes = [
+            self._a_entidad(doc_id, datos, con_pasajero=False)
+            for doc_id, datos in documentos
+        ]
+        if not con_pasajero:
+            return solicitudes
+        pasajeros = self.usuario_repo.obtener_varios(
+            [s.pasajero_id for s in solicitudes],
+        )
+        for solicitud in solicitudes:
+            solicitud.pasajero = pasajeros.get(a_texto_id(solicitud.pasajero_id))
+        return solicitudes
+
     def listar_disponibles(self):
         filtros = [Filtro('estado', 'in', ESTADOS_DISPONIBLES)]
-        return [
-            self._a_entidad(doc_id, datos)
-            for doc_id, datos in self.store.query(SOLICITUDES, filtros)
-        ]
+        return self._hidratar(self.store.query(SOLICITUDES, filtros))
 
     def listar(self):
-        return [
-            self._a_entidad(doc_id, datos)
-            for doc_id, datos in self.store.query(SOLICITUDES)
-        ]
+        return self._hidratar(self.store.query(SOLICITUDES))
+
+    def obtener_varias(self, solicitud_ids, *, con_pasajero=True):
+        documentos = self.store.get_many(
+            SOLICITUDES, [a_texto_id(i) for i in solicitud_ids],
+        )
+        solicitudes = self._hidratar(
+            documentos.items(), con_pasajero=con_pasajero,
+        )
+        return {s.id: s for s in solicitudes}
 
     def guardar(self, solicitud):
         self.store.set(SOLICITUDES, solicitud.id, self._a_documento(solicitud))
@@ -136,7 +156,7 @@ class FirestoreViajeRepository(ViajeRepository):
             'estado': str(viaje.estado),
         }
 
-    def _a_entidad(self, doc_id, datos):
+    def _a_entidad(self, doc_id, datos, *, hidratar=True):
         viaje = Viaje(
             id=a_texto_id(doc_id),
             solicitud_id=datos.get('solicitud_id'),
@@ -145,6 +165,9 @@ class FirestoreViajeRepository(ViajeRepository):
             tarifa_final=a_decimal(datos.get('tarifa_final')),
             estado=datos.get('estado', EstadoViaje.ASIGNADO),
         )
+        if not hidratar:
+            # El llamador hidrata en lote (ver _hidratar).
+            return viaje
         # Hidratación equivalente al select_related del ORM: el
         # ViajeSerializer expone pasajero y conductor anidados.
         try:
@@ -178,11 +201,25 @@ class FirestoreViajeRepository(ViajeRepository):
             raise ViajeNoEncontradoError(viaje_id)
         return self._a_entidad(viaje_id, datos)
 
-    def listar(self):
-        return [
-            self._a_entidad(doc_id, datos)
-            for doc_id, datos in self.store.query(VIAJES)
+    def _hidratar(self, documentos):
+        """Dos lecturas por lote (usuarios y mototaxistas) para toda la
+        lista, en vez de dos por viaje."""
+        documentos = list(documentos)
+        viajes = [
+            self._a_entidad(doc_id, datos, hidratar=False)
+            for doc_id, datos in documentos
         ]
+        pasajeros = self.usuario_repo.obtener_varios([v.pasajero_id for v in viajes])
+        conductores = self.mototaxista_repo.obtener_varios(
+            [v.conductor_id for v in viajes],
+        )
+        for viaje in viajes:
+            viaje.pasajero = pasajeros.get(a_texto_id(viaje.pasajero_id))
+            viaje.conductor = conductores.get(a_texto_id(viaje.conductor_id))
+        return viajes
+
+    def listar(self):
+        return self._hidratar(self.store.query(VIAJES))
 
     def listar_por_usuario(self, usuario_id, *, estados=None):
         """Firestore no tiene OR entre campos distintos sin índice
@@ -208,7 +245,7 @@ class FirestoreViajeRepository(ViajeRepository):
                 if datos.get('estado') in aceptables
             }
 
-        return [self._a_entidad(doc_id, datos) for doc_id, datos in encontrados.items()]
+        return self._hidratar(encontrados.items())
 
     def guardar(self, viaje):
         self.store.set(VIAJES, viaje.id, self._a_documento(viaje))

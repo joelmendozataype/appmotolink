@@ -56,6 +56,35 @@ def get_cliente():
         return _cliente
 
 
+def _bajo_eventlet():
+    """¿Se está corriendo con eventlet monkey-patcheado (run_realtime.py)?"""
+    try:
+        from eventlet.patcher import is_monkey_patched
+    except ImportError:
+        return False
+    return is_monkey_patched('socket')
+
+
+def ejecutar(funcion, *args, **kwargs):
+    """Ejecuta una llamada al SDK de Firestore.
+
+    Bajo eventlet hay que sacarla a un hilo real. El SDK habla gRPC, y el
+    núcleo de gRPC está en C con sus propios sockets nativos: el monkey
+    patching de eventlet no lo alcanza, así que su espera bloqueante
+    congela el hub entero y el servidor deja de responder (síntoma:
+    la petición se acepta y nunca contesta).
+
+    `tpool.execute` la corre en un hilo del sistema operativo y devuelve
+    el control al hub mientras tanto. Fuera de eventlet —runserver, los
+    tests, el comando de migración— se llama directo, sin intermediarios.
+    """
+    if _bajo_eventlet():
+        from eventlet import tpool
+
+        return tpool.execute(funcion, *args, **kwargs)
+    return funcion(*args, **kwargs)
+
+
 class FirestoreDocumentStore(DocumentStore):
     def __init__(self, cliente=None):
         self._cliente_inyectado = cliente
@@ -68,11 +97,27 @@ class FirestoreDocumentStore(DocumentStore):
         return self.cliente.collection(coleccion).document(str(doc_id))
 
     def get(self, coleccion, doc_id):
-        snapshot = self._ref(coleccion, doc_id).get()
+        snapshot = ejecutar(self._ref(coleccion, doc_id).get)
         return snapshot.to_dict() if snapshot.exists else None
 
+    def get_many(self, coleccion, doc_ids):
+        # Una sola llamada BatchGetDocuments en vez de N lecturas sueltas.
+        ids = [str(i) for i in dict.fromkeys(doc_ids) if i is not None]
+        if not ids:
+            return {}
+        refs = [self._ref(coleccion, doc_id) for doc_id in ids]
+
+        def _leer():
+            return {
+                snapshot.id: snapshot.to_dict()
+                for snapshot in self.cliente.get_all(refs)
+                if snapshot.exists
+            }
+
+        return ejecutar(_leer)
+
     def set(self, coleccion, doc_id, datos):
-        self._ref(coleccion, doc_id).set(datos)
+        ejecutar(self._ref(coleccion, doc_id).set, datos)
 
     def create(self, coleccion, doc_id, datos):
         from google.api_core import exceptions as google_exceptions
@@ -80,15 +125,15 @@ class FirestoreDocumentStore(DocumentStore):
         try:
             # create() falla si el documento ya existe: así se replica la
             # UNIQUE constraint que antes daba SQLite.
-            self._ref(coleccion, doc_id).create(datos)
+            ejecutar(self._ref(coleccion, doc_id).create, datos)
         except google_exceptions.AlreadyExists as error:
             raise DocumentoYaExisteError(f'{coleccion}/{doc_id}') from error
 
     def update(self, coleccion, doc_id, cambios):
-        self._ref(coleccion, doc_id).update(cambios)
+        ejecutar(self._ref(coleccion, doc_id).update, cambios)
 
     def delete(self, coleccion, doc_id):
-        self._ref(coleccion, doc_id).delete()
+        ejecutar(self._ref(coleccion, doc_id).delete)
 
     def query(self, coleccion, filtros=(), limite=None):
         from google.cloud.firestore_v1.base_query import FieldFilter
@@ -100,7 +145,13 @@ class FirestoreDocumentStore(DocumentStore):
             )
         if limite is not None:
             consulta = consulta.limit(limite)
-        return [(snapshot.id, snapshot.to_dict()) for snapshot in consulta.stream()]
+
+        # stream() es perezoso: hay que consumirlo DENTRO del hilo, o el
+        # tráfico gRPC volvería al hub de eventlet al iterarlo aquí.
+        def _leer():
+            return [(s.id, s.to_dict()) for s in consulta.stream()]
+
+        return ejecutar(_leer)
 
     def compare_and_set(self, coleccion, doc_id, campo, esperado, cambios):
         from firebase_admin import firestore
@@ -118,4 +169,5 @@ class FirestoreDocumentStore(DocumentStore):
             transaction.update(ref, cambios)
             return True
 
-        return _transaccion(self.cliente.transaction())
+        # La transacción completa (lectura y escritura) va en un solo hilo.
+        return ejecutar(_transaccion, self.cliente.transaction())

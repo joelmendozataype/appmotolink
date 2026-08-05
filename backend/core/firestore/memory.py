@@ -24,6 +24,18 @@ class InMemoryDocumentStore(DocumentStore):
             documento = self._coleccion(coleccion).get(str(doc_id))
             return copy.deepcopy(documento) if documento is not None else None
 
+    def get_many(self, coleccion, doc_ids):
+        with self._lock:
+            documentos = self._coleccion(coleccion)
+            resultado = {}
+            for doc_id in doc_ids:
+                if doc_id is None:
+                    continue
+                documento = documentos.get(str(doc_id))
+                if documento is not None:
+                    resultado[str(doc_id)] = copy.deepcopy(documento)
+            return resultado
+
     def set(self, coleccion, doc_id, datos):
         with self._lock:
             self._coleccion(coleccion)[str(doc_id)] = copy.deepcopy(datos)

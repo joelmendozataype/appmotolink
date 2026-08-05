@@ -95,6 +95,16 @@ class FirestoreUsuarioRepository(UsuarioRepository):
             for doc_id, datos in self.store.query(USUARIOS, filtros)
         ]
 
+    def obtener_varios(self, usuario_ids):
+        """Lectura por lote para hidratar listas sin caer en N+1."""
+        documentos = self.store.get_many(
+            USUARIOS, [a_texto_id(i) for i in usuario_ids],
+        )
+        return {
+            doc_id: _a_entidad(doc_id, datos)
+            for doc_id, datos in documentos.items()
+        }
+
     def guardar(self, usuario):
         anterior = self.store.get(USUARIOS, usuario.id)
         if anterior is None:
@@ -167,10 +177,28 @@ class FirestoreMototaxistaRepository(MototaxistaRepository):
         return self._a_entidad(usuario_id, datos)
 
     def listar(self):
-        return [
-            self._a_entidad(doc_id, datos)
-            for doc_id, datos in self.store.query(MOTOTAXISTAS)
-        ]
+        documentos = self.store.query(MOTOTAXISTAS)
+        return list(self._hidratar(documentos).values())
+
+    def obtener_varios(self, usuario_ids):
+        """Lectura por lote: dos viajes de red (mototaxistas + usuarios)
+        en vez de dos por cada elemento de la lista."""
+        documentos = self.store.get_many(
+            MOTOTAXISTAS, [a_texto_id(i) for i in usuario_ids],
+        )
+        return self._hidratar(documentos.items())
+
+    def _hidratar(self, documentos):
+        documentos = list(documentos)
+        usuarios = self.usuario_repo.obtener_varios(
+            [doc_id for doc_id, _ in documentos],
+        )
+        resultado = {}
+        for doc_id, datos in documentos:
+            mototaxista = self._a_entidad(doc_id, datos, con_usuario=False)
+            mototaxista.usuario = usuarios.get(a_texto_id(doc_id))
+            resultado[a_texto_id(doc_id)] = mototaxista
+        return resultado
 
     def guardar(self, mototaxista):
         return self.crear(mototaxista)

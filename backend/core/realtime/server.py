@@ -4,13 +4,23 @@ import socketio
 
 logger = logging.getLogger('motolink.realtime')
 
-# Sin async_mode explícito: python-socketio autodetecta el modo correcto.
-# Bajo manage.py runserver usa 'threading' (long-polling); bajo run_realtime.py
-# (que llama eventlet.monkey_patch() antes de importar este módulo) detecta
-# eventlet ya cargado y usa 'eventlet', que sabe hacer el upgrade real de
-# WebSocket vía el hijacking de sockets de eventlet. Forzar 'threading' rompe
-# ese upgrade bajo eventlet (AssertionError: write() before start_response()).
-sio = socketio.Server(cors_allowed_origins='*', logger=False, engineio_logger=False)
+# async_mode explícito: 'threading'.
+#
+# Antes se dejaba autodetectar, y con eventlet instalado python-socketio lo
+# elegía siempre. Eso es incompatible con el SDK de Firestore: gRPC no
+# sobrevive al monkey patching de eventlet y la primera consulta se cuelga
+# para siempre (ver run_realtime.py). La autodetección lo escogía incluso
+# sin llamar a monkey_patch(), por el solo hecho de estar instalado.
+#
+# En modo 'threading' los WebSockets reales los provee simple-websocket
+# sobre un servidor WSGI con hilos (Werkzeug en desarrollo, gunicorn
+# --worker-class gthread o waitress en producción).
+sio = socketio.Server(
+    async_mode='threading',
+    cors_allowed_origins='*',
+    logger=False,
+    engineio_logger=False,
+)
 
 
 @sio.event
