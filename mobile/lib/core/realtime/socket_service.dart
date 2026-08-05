@@ -19,7 +19,7 @@ class SocketService {
 
   bool get estaConectado => _socket?.connected ?? false;
 
-  void connect([String baseUrl = 'http://10.0.2.2:8000']) {
+  void connect([String baseUrl = 'http://localhost:8000']) {
     if (_socket != null) return;
 
     _socket = io.io(
