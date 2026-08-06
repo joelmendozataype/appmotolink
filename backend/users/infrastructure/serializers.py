@@ -38,6 +38,22 @@ class UsuarioSerializer(serializers.Serializer):
     def validate_contrasena(self, valor):
         return _validar_contrasena(valor)
 
+    def validate_rol(self, valor):
+        """El registro es público, así que el rol no puede ser libre.
+
+        Sin esto, cualquiera se daba de alta desde la app eligiendo
+        'administrador' y quedaba con permiso para listar y borrar
+        cuentas, lo que dejaba sin efecto todos los permisos por rol.
+
+        Los administradores se crean fuera de banda:
+            python manage.py crear_administrador
+        """
+        if valor == RolUsuario.ADMINISTRADOR:
+            raise serializers.ValidationError(
+                'No es posible registrarse como administrador.',
+            )
+        return valor
+
     def create(self, validated_data):
         usuario = Usuario(
             nombre=validated_data['nombre'],

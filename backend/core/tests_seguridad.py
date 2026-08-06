@@ -259,18 +259,82 @@ class CuentaPropiaTests(FirestoreTestCase):
         self.assertEqual(respuesta.status_code, 403)
 
     def test_nadie_se_puede_ascender_a_administrador(self):
+        """Se rechaza de forma explícita, no en silencio: así quien lo
+        intente recibe un error en vez de creer que funcionó."""
         respuesta = self.cliente_ana.patch(
             f'/api/usuarios/{self.ana.id}/',
             {'rol': RolUsuario.ADMINISTRADOR}, format='json',
         )
-        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.status_code, 400)
         self.assertEqual(
             self.usuarios.obtener_por_id(self.ana.id).rol, RolUsuario.PASAJERO,
         )
 
+    def test_cambiar_el_nombre_sigue_funcionando(self):
+        """La restricción del rol no debe estorbar la edición normal."""
+        respuesta = self.cliente_ana.patch(
+            f'/api/usuarios/{self.ana.id}/', {'nombre': 'Ana María'},
+            format='json',
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(self.usuarios.obtener_por_id(self.ana.id).nombre, 'Ana María')
+
     def test_un_usuario_normal_no_puede_borrar_cuentas(self):
         respuesta = self.cliente_ana.delete(f'/api/usuarios/{self.beto.id}/')
         self.assertEqual(respuesta.status_code, 403)
+
+
+class RegistroDeRolTests(FirestoreTestCase):
+    """El registro es público: el rol no puede quedar a elección de quien
+    se da de alta."""
+
+    def setUp(self):
+        super().setUp()
+        self.anonimo = APIClient()
+
+    def _registrar(self, rol, correo):
+        return self.anonimo.post(
+            '/api/usuarios/',
+            {'nombre': 'X', 'correo': correo,
+             'contrasena': 'MotoLink2026!', 'rol': rol},
+            format='json',
+        )
+
+    def test_no_se_puede_registrar_un_administrador(self):
+        """Agujero real: cualquiera se daba de alta como administrador
+        desde la app y quedaba con permiso para listar y borrar cuentas,
+        lo que dejaba sin efecto todos los permisos por rol."""
+        respuesta = self._registrar(
+            RolUsuario.ADMINISTRADOR, 'falso.admin@motolink.com',
+        )
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIsNone(
+            self.usuarios.buscar_por_correo('falso.admin@motolink.com'),
+        )
+
+    def test_los_roles_normales_si_se_pueden_registrar(self):
+        self.assertEqual(
+            self._registrar(RolUsuario.PASAJERO, 'p@motolink.com').status_code,
+            201,
+        )
+        self.assertEqual(
+            self._registrar(RolUsuario.MOTOTAXISTA, 'm@motolink.com').status_code,
+            201,
+        )
+
+    def test_tampoco_por_la_via_del_alta_de_mototaxista(self):
+        """El alta de mototaxista anida el usuario; la restricción debe
+        aplicarse también ahí."""
+        respuesta = self.anonimo.post(
+            '/api/mototaxistas/',
+            {'usuario': {'nombre': 'X', 'correo': 'falso2@motolink.com',
+                         'contrasena': 'MotoLink2026!',
+                         'rol': RolUsuario.ADMINISTRADOR},
+             'licencia': 'L', 'placa': 'P', 'marca_vehiculo': 'M',
+             'modelo_vehiculo': 'M'},
+            format='json',
+        )
+        self.assertEqual(respuesta.status_code, 400)
 
 
 class ContrasenaTests(FirestoreTestCase):
