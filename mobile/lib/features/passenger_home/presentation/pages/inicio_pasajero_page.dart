@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/realtime/socket_events.dart';
 import 'package:mobile/core/realtime/socket_service.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/features/trip_tracking/domain/entities/viaje_entity.dart';
+import 'package:mobile/shared/widgets/aviso_viaje_activo.dart';
 import 'package:provider/provider.dart';
 
 class InicioPasajeroPage extends StatefulWidget {
@@ -14,9 +17,31 @@ class InicioPasajeroPage extends StatefulWidget {
 }
 
 class _InicioPasajeroPageState extends State<InicioPasajeroPage> {
+  Viaje? _viajeActivo;
+
+  /// Busca si ya hay un viaje en curso al abrir la pantalla.
+  ///
+  /// Depender solo del aviso en vivo era frágil: si el aviso se perdió
+  /// —app cerrada, sin red, o el fallo de salas que arreglamos— el
+  /// usuario se quedaba aquí sin forma de volver a su propio viaje.
+  Future<void> _buscarViajeActivo() async {
+    final usuarioId = context.read<AuthProvider>().usuarioActual?.id;
+    if (usuarioId == null) return;
+    try {
+      final viaje = await ServiceLocator.obtenerViajeActivo(usuarioId);
+      if (!mounted) return;
+      setState(() => _viajeActivo = viaje);
+    } catch (_) {
+      // 404 es lo normal: no hay viaje en curso. Cualquier otro fallo
+      // tampoco debe estorbar la pantalla de inicio.
+      if (mounted) setState(() => _viajeActivo = null);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _buscarViajeActivo();
     final pasajeroId = context.read<AuthProvider>().usuarioActual?.id;
     if (pasajeroId != null) {
       // El conductor puede aceptar/contraofertar mientras el pasajero está
@@ -86,33 +111,49 @@ class _InicioPasajeroPageState extends State<InicioPasajeroPage> {
           ),
         ],
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.electric_moped, size: 96, color: Colors.teal),
-                const SizedBox(height: 24),
-                Text(
-                  '¿A dónde quieres ir?',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  icon: const Icon(Icons.add_location_alt),
-                  label: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('Solicitar un viaje'),
+      body: Column(
+        children: [
+          if (_viajeActivo != null)
+            AvisoViajeActivo(
+              titulo: 'Tienes un viaje en curso',
+              detalle:
+                  'Conductor: ${_viajeActivo!.conductor.usuario.nombre}',
+              onEntrar: () =>
+                  context.push(AppRoutes.viajeEnCursoPath(_viajeActivo!.id)),
+            ),
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.electric_moped,
+                          size: 96, color: Colors.teal),
+                      const SizedBox(height: 24),
+                      Text(
+                        '¿A dónde quieres ir?',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 24),
+                      FilledButton.icon(
+                        icon: const Icon(Icons.add_location_alt),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Text('Solicitar un viaje'),
+                        ),
+                        onPressed: () =>
+                            context.push(AppRoutes.crearSolicitud),
+                      ),
+                    ],
                   ),
-                  onPressed: () => context.push(AppRoutes.crearSolicitud),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
