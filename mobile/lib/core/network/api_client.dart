@@ -43,6 +43,14 @@ class ApiClient {
     }
   }
 
+  /// La cookie de sesión vigente, para poder guardarla entre arranques.
+  String? get sessionCookie => _sessionCookie;
+
+  /// Restaura una cookie guardada en un arranque anterior.
+  void restaurarSesion(String cookie) {
+    _sessionCookie = cookie;
+  }
+
   void cerrarSesion() {
     _sessionCookie = null;
   }

@@ -52,6 +52,7 @@ dependencies:
 
   # Gestión de estado (ChangeNotifier)
   provider: ^6.1.2
+  flutter_secure_storage: ^10.3.1
 
 dev_dependencies:
   flutter_test:

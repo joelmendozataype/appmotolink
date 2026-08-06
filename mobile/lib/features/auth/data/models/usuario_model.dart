@@ -22,6 +22,17 @@ class UsuarioModel extends Usuario {
     );
   }
 
+  /// Envuelve una entidad para poder serializarla (guardar la sesión).
+  factory UsuarioModel.fromEntity(Usuario usuario) {
+    return UsuarioModel(
+      id: usuario.id,
+      nombre: usuario.nombre,
+      correo: usuario.correo,
+      contrasena: usuario.contrasena,
+      rol: usuario.rol,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
