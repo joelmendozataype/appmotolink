@@ -21,6 +21,11 @@ class FlujoNegociacionTests(FirestoreTestCase):
             nombre='Conductor Test', correo='conductor.test@motolink.com',
             licencia='LIC-TEST', placa='TST-001',
         )
+        # Cada rol con su propia sesión: es como ocurre en la realidad,
+        # dos dispositivos distintos. Desde la revisión de seguridad el
+        # actor sale de la sesión, no del cuerpo de la petición.
+        self.client = self.cliente_de(self.pasajero)
+        self.conductor_client = self.cliente_de(self.conductor.usuario)
 
     def _crear_solicitud(self, tarifa=10.0):
         respuesta = self.client.post(
@@ -41,7 +46,7 @@ class FlujoNegociacionTests(FirestoreTestCase):
         self.assertEqual(solicitud['estado'], 'pendiente')
 
         # El conductor acepta la tarifa propuesta tal cual.
-        respuesta = self.client.post(
+        respuesta = self.conductor_client.post(
             f"/api/solicitudes-viaje/{solicitud['id']}/aceptar/",
             {'conductor_id': str(self.conductor.usuario_id)},
             format='json',
@@ -96,7 +101,7 @@ class FlujoNegociacionTests(FirestoreTestCase):
     def test_contraoferta_con_tarifa_distinta(self):
         solicitud = self._crear_solicitud(tarifa=10.0)
 
-        respuesta = self.client.post(
+        respuesta = self.conductor_client.post(
             f"/api/solicitudes-viaje/{solicitud['id']}/contraofertar/",
             {'conductor_id': str(self.conductor.usuario_id), 'tarifa': 13.5},
             format='json',
@@ -108,7 +113,7 @@ class FlujoNegociacionTests(FirestoreTestCase):
     def test_rechazo_no_es_visible_para_el_pasajero(self):
         solicitud = self._crear_solicitud()
 
-        respuesta = self.client.post(
+        respuesta = self.conductor_client.post(
             f"/api/solicitudes-viaje/{solicitud['id']}/rechazar/",
             {'conductor_id': str(self.conductor.usuario_id)},
             format='json',
@@ -125,14 +130,14 @@ class FlujoNegociacionTests(FirestoreTestCase):
     def test_conductor_no_puede_responder_dos_veces_la_misma_solicitud(self):
         solicitud = self._crear_solicitud()
 
-        primera = self.client.post(
+        primera = self.conductor_client.post(
             f"/api/solicitudes-viaje/{solicitud['id']}/aceptar/",
             {'conductor_id': str(self.conductor.usuario_id)},
             format='json',
         )
         self.assertEqual(primera.status_code, 201)
 
-        segunda = self.client.post(
+        segunda = self.conductor_client.post(
             f"/api/solicitudes-viaje/{solicitud['id']}/contraofertar/",
             {'conductor_id': str(self.conductor.usuario_id), 'tarifa': 5},
             format='json',
@@ -142,21 +147,20 @@ class FlujoNegociacionTests(FirestoreTestCase):
 
     def test_no_se_puede_responder_una_solicitud_ya_aceptada(self):
         solicitud = self._crear_solicitud()
-        oferta = self.client.post(
+        oferta = self.conductor_client.post(
             f"/api/solicitudes-viaje/{solicitud['id']}/aceptar/",
             {'conductor_id': str(self.conductor.usuario_id)},
             format='json',
         ).data
         self.client.post(f"/api/ofertas/{oferta['id']}/seleccionar/")
 
-        # Otro conductor (otro usuario) intenta responder tarde.
+        # Otro conductor (otro usuario, otra sesión) intenta responder tarde.
         otro_conductor = self.crear_mototaxista(
             nombre='Otro Conductor', correo='otro.conductor@motolink.com',
             licencia='LIC-2', placa='TST-002', marca='Yamaha', modelo='Crypton',
         )
-        respuesta = self.client.post(
+        respuesta = self.cliente_de(otro_conductor.usuario).post(
             f"/api/solicitudes-viaje/{solicitud['id']}/aceptar/",
-            {'conductor_id': str(otro_conductor.usuario_id)},
-            format='json',
+            {}, format='json',
         )
         self.assertEqual(respuesta.status_code, 409)

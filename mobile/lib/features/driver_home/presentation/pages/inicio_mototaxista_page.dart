@@ -57,6 +57,10 @@ class _InicioMototaxistaPageState extends State<InicioMototaxistaPage> {
 
   void _onSolicitudCreada(dynamic data) {
     if (!mounted) return;
+    // Esta página queda montada debajo mientras el conductor atiende un
+    // viaje; sin la guarda, el aviso de nuevas solicitudes se dibujaría
+    // encima y taparía el botón "Finalizar viaje".
+    if (ModalRoute.of(context)?.isCurrent != true) return;
     final origen = data['origen'] ?? '';
     final destino = data['destino'] ?? '';
     ScaffoldMessenger.of(context).showSnackBar(

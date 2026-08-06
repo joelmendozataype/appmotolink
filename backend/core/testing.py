@@ -7,8 +7,10 @@ fallan en vez de pasar en silencio.
 Cada test arranca con un almacén en memoria vacío, igual que antes cada
 test arrancaba con una base de datos de test recién creada.
 """
+from django.conf import settings
 from django.test import SimpleTestCase, override_settings
 
+from core.authentication import SESSION_KEY
 from core.firestore import set_store
 from core.firestore.memory import InMemoryDocumentStore
 from core.di import (
@@ -42,6 +44,37 @@ class FirestoreTestCase(SimpleTestCase):
         if contrasena:
             usuario.set_password(contrasena)
         return usuario_repo().crear(usuario)
+
+    # --- sesión ---------------------------------------------------------
+
+    def autenticar(self, usuario, cliente=None):
+        """Deja al cliente con la sesión de `usuario` iniciada.
+
+        Desde la revisión de seguridad casi toda la API exige sesión, así
+        que los tests tienen que autenticarse igual que la app. Se escribe
+        la sesión directamente en vez de pasar por /login para no depender
+        de conocer la contraseña de cada fixture.
+        """
+        cliente = cliente or self.client
+        sesion = cliente.session
+        sesion[SESSION_KEY] = str(usuario.id)
+        sesion.save()
+        # Con el backend de cookies firmadas hay que devolverle la cookie
+        # al cliente a mano: no hay tabla de sesiones que consultar.
+        cliente.cookies[settings.SESSION_COOKIE_NAME] = sesion.session_key
+        return usuario
+
+    def cliente_de(self, usuario):
+        """Un APIClient nuevo con la sesión de `usuario` ya iniciada.
+
+        Permite tener pasajero y conductor a la vez en el mismo test, que
+        es como ocurre de verdad: dos dispositivos distintos.
+        """
+        from rest_framework.test import APIClient
+
+        cliente = APIClient()
+        self.autenticar(usuario, cliente)
+        return cliente
 
     def crear_mototaxista(self, *, nombre, correo, licencia='LIC-000',
                           placa='XXX-000', marca='Honda', modelo='Wave'):

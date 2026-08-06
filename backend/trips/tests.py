@@ -1,5 +1,3 @@
-from rest_framework.test import APIClient
-
 from core.testing import FirestoreTestCase
 from trips.domain.entities import EstadoSolicitud, EstadoViaje
 
@@ -11,7 +9,6 @@ class HistorialTests(FirestoreTestCase):
 
     def setUp(self):
         super().setUp()
-        self.client = APIClient()
         self.pasajero = self.crear_usuario(
             nombre='Pasajero Test', correo='pasajero.hist@motolink.com',
         )
@@ -19,6 +16,10 @@ class HistorialTests(FirestoreTestCase):
             nombre='Conductor Test', correo='conductor.hist@motolink.com',
             licencia='LIC-H', placa='HIS-001',
         )
+        # El historial y el viaje activo son siempre los del usuario en
+        # sesión, así que cada parte consulta con su propio cliente.
+        self.client = self.cliente_de(self.pasajero)
+        self.conductor_client = self.cliente_de(self.conductor.usuario)
 
         solicitud = self.crear_solicitud(pasajero=self.pasajero, tarifa=10)
         solicitud.estado = EstadoSolicitud.ACEPTADA
@@ -32,16 +33,12 @@ class HistorialTests(FirestoreTestCase):
         self.viajes.guardar(self.viaje)
 
     def test_historial_incluye_el_viaje_para_el_pasajero(self):
-        respuesta = self.client.get(
-            f'/api/historial/?usuarioId={self.pasajero.id}',
-        )
+        respuesta = self.client.get('/api/historial/')
         ids = [v['id'] for v in respuesta.data['viajes']]
         self.assertIn(str(self.viaje.id), ids)
 
     def test_historial_incluye_el_viaje_para_el_conductor(self):
-        respuesta = self.client.get(
-            f'/api/historial/?usuarioId={self.conductor.usuario_id}',
-        )
+        respuesta = self.conductor_client.get('/api/historial/')
         ids = [v['id'] for v in respuesta.data['viajes']]
         self.assertIn(str(self.viaje.id), ids)
 
@@ -56,19 +53,15 @@ class HistorialTests(FirestoreTestCase):
             conductor=self.conductor, tarifa_final=8,
         )
 
-        respuesta = self.client.get(
-            f'/api/viajes/activo/?usuarioId={self.conductor.usuario_id}',
-        )
+        respuesta = self.conductor_client.get('/api/viajes/activo/')
         self.assertEqual(respuesta.status_code, 200)
 
-        respuesta = self.client.get(
-            f'/api/viajes/activo/?usuarioId={self.pasajero.id}',
-        )
+        respuesta = self.client.get('/api/viajes/activo/')
         self.assertEqual(respuesta.status_code, 200)
 
     def test_viaje_activo_sin_viajes_devuelve_404(self):
         solo = self.crear_usuario(
             nombre='Sin Viajes', correo='sin.viajes@motolink.com',
         )
-        respuesta = self.client.get(f'/api/viajes/activo/?usuarioId={solo.id}')
+        respuesta = self.cliente_de(solo).get('/api/viajes/activo/')
         self.assertEqual(respuesta.status_code, 404)

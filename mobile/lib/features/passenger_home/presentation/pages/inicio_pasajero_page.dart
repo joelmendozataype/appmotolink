@@ -42,6 +42,10 @@ class _InicioPasajeroPageState extends State<InicioPasajeroPage> {
 
   void _onOferta(dynamic data) {
     if (!mounted) return;
+    // Esta página sigue montada debajo mientras el pasajero navega a la
+    // negociación o al viaje, así que sin esta guarda el aviso se dibuja
+    // encima de esas pantallas y llega a tapar sus botones.
+    if (ModalRoute.of(context)?.isCurrent != true) return;
     final solicitudId = data['solicitudId'] as String?;
     if (solicitudId == null) return;
     final conductor = data['conductorNombre'] ?? 'Un conductor';

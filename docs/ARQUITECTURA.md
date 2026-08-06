@@ -202,6 +202,43 @@ invariantes del dominio se sostienen así:
 | Solo una selección cierra la solicitud | Transacción | `compare_and_set` sobre `estado` (transacción de Firestore) |
 | Puntuación entre 1 y 5 | CHECK a medias (`>= 0`) + validador | Invariante de la entidad `Calificacion` |
 
+### Autenticación y autorización
+
+La API exige sesión por defecto (`IsAuthenticated` en
+`DEFAULT_PERMISSION_CLASSES`). Solo tres rutas quedan abiertas, porque sin
+ellas nadie podría llegar a tener sesión: alta de usuario, alta de
+mototaxista y login. Las dos primeras están limitadas a 20 altas/hora y el
+login a 10 intentos/minuto.
+
+**Regla central: el actor sale de `request.user`, nunca del cuerpo de la
+petición.** Antes, `pasajero` y `conductor_id` llegaban en el JSON y se
+usaban tal cual, así que bastaba conocer un id ajeno —que la propia API
+regalaba en `GET /api/usuarios/`— para pedir viajes, ofertar o finalizar
+en nombre de otro. Esos campos hoy se ignoran; se conservan en el
+contrato para no romper la app.
+
+Reglas de propiedad:
+
+| Recurso | Quién puede |
+|---|---|
+| Ficha de usuario | Su dueño (el administrador, todas) |
+| Listado de usuarios y pasajeros | Solo administrador |
+| Borrar cuenta | Solo administrador |
+| Crear solicitud | Solo pasajero, y siempre a su propio nombre |
+| Aceptar / contraofertar / rechazar | Solo mototaxista, con su perfil |
+| Ver ofertas de una solicitud | El pasajero dueño de la solicitud |
+| Seleccionar conductor | El pasajero dueño de la solicitud |
+| Ver o finalizar un viaje | Sus dos participantes |
+| Historial y viaje activo | Siempre el del usuario en sesión |
+| Calificar | El pasajero del viaje, y solo si ya terminó |
+
+El rol no se puede modificar por la API de edición: si no, cualquiera se
+ascendería a administrador editando su propia ficha.
+
+Todo esto está cubierto por `core/tests_seguridad.py`, que comprueba tanto
+que sin sesión no se llega a nada como que con sesión solo se llega a lo
+propio.
+
 ### Firestore y el tiempo real: por qué se fue eventlet
 
 `run_realtime.py` usaba `eventlet.monkey_patch()`. Eso es incompatible

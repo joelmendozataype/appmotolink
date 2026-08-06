@@ -4,6 +4,8 @@ Ya no son ModelSerializer (no hay modelos Django detrás), pero el JSON
 de entrada y de salida es exactamente el mismo que antes: la app Flutter
 no se entera de que la persistencia cambió.
 """
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from core import di
@@ -13,12 +15,28 @@ from users.domain.repositories import CorreoDuplicadoError
 CORREO_DUPLICADO = 'Ya existe un usuario con este correo.'
 
 
+def _validar_contrasena(valor):
+    """Aplica AUTH_PASSWORD_VALIDATORS al registro.
+
+    Estaban configurados en settings pero nadie los invocaba, así que se
+    aceptaba cualquier cosa como contraseña, incluida '1'.
+    """
+    try:
+        validate_password(valor)
+    except DjangoValidationError as error:
+        raise serializers.ValidationError(list(error.messages))
+    return valor
+
+
 class UsuarioSerializer(serializers.Serializer):
     id = serializers.CharField(read_only=True)
     nombre = serializers.CharField(max_length=150)
     correo = serializers.EmailField()
     contrasena = serializers.CharField(max_length=255, write_only=True)
     rol = serializers.ChoiceField(choices=RolUsuario.valores())
+
+    def validate_contrasena(self, valor):
+        return _validar_contrasena(valor)
 
     def create(self, validated_data):
         usuario = Usuario(
@@ -34,6 +52,9 @@ class UsuarioSerializer(serializers.Serializer):
 
     def update(self, instance, validated_data):
         raw_password = validated_data.pop('contrasena', None)
+        # El rol nunca se cambia por esta vía: si no, cualquiera podría
+        # ascenderse a administrador editando su propia ficha.
+        validated_data.pop('rol', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if raw_password:

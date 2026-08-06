@@ -62,59 +62,62 @@ class _ViajeAsignadoPageState extends State<ViajeAsignadoPage> {
           ? ErrorRetryView(mensaje: _error!, onRetry: _cargarViaje)
           : viaje == null
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Expanded(
-                  child: Container(
-                    color: Colors.teal.shade50,
-                    child: const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.map, size: 80, color: Colors.teal),
-                          SizedBox(height: 8),
-                          Text('Mapa en vivo (simulado)'),
-                        ],
-                      ),
-                    ),
-                  ),
+          : Container(
+              color: Colors.teal.shade50,
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.map, size: 80, color: Colors.teal),
+                    SizedBox(height: 8),
+                    Text('Mapa en vivo (simulado)'),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ListTile(
-                        leading: const CircleAvatar(child: Icon(Icons.person)),
-                        title: Text(viaje.pasajero.nombre),
-                        subtitle: const Text('Pasajero'),
-                        trailing: Text(
-                          'S/ ${viaje.tarifaFinal.toStringAsFixed(2)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        icon: const Icon(Icons.flag),
-                        label: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: _finalizando
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text('Finalizar viaje'),
-                        ),
-                        onPressed: _finalizando ? null : _finalizarViaje,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
+      // Ver la nota en viaje_en_curso_page: al vivir en bottomNavigationBar,
+      // el botón queda por encima de cualquier SnackBar en vez de debajo.
+      bottomNavigationBar: (_error != null || viaje == null)
+          ? null
+          : _barraInferior(viaje),
+    );
+  }
+
+  Widget _barraInferior(Viaje viaje) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.person)),
+              title: Text(viaje.pasajero.nombre),
+              subtitle: const Text('Pasajero'),
+              trailing: Text(
+                'S/ ${viaje.tarifaFinal.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              icon: const Icon(Icons.flag),
+              label: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: _finalizando
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Finalizar viaje'),
+              ),
+              onPressed: _finalizando ? null : _finalizarViaje,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

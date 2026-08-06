@@ -64,11 +64,16 @@ class _OfertasRecibidasPageState extends State<OfertasRecibidasPage> {
 
   void _onNuevaOferta(dynamic data) {
     if (!mounted) return;
-    final conductor = data['conductorNombre'] ?? 'Un conductor';
-    final tarifa = data['tarifa'];
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$conductor respondió con S/ $tarifa')),
-    );
+    // La lista se refresca siempre, pero el aviso solo se muestra si esta
+    // pantalla está al frente: si el pasajero ya avanzó a la selección o
+    // al viaje, el SnackBar se dibujaría sobre esas pantallas.
+    if (ModalRoute.of(context)?.isCurrent == true) {
+      final conductor = data['conductorNombre'] ?? 'Un conductor';
+      final tarifa = data['tarifa'];
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$conductor respondió con S/ $tarifa')),
+      );
+    }
     _cargarOfertas();
   }
 

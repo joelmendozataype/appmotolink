@@ -3,10 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
-import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/core/utils/sesion_guard.dart';
 import 'package:mobile/features/trip_request/domain/entities/solicitud_viaje_entity.dart';
 import 'package:mobile/shared/widgets/error_retry_view.dart';
-import 'package:provider/provider.dart';
 
 /// El conductor responde a una solicitud: aceptar la tarifa propuesta,
 /// contraofertar una distinta, o rechazarla. Las tres acciones crean una
@@ -53,12 +52,15 @@ class _ContraofertaPageState extends State<ContraofertaPage> {
     }
   }
 
-  String get _conductorId => context.read<AuthProvider>().usuarioActual!.id;
+  Future<void> _responder(Future<void> Function(String conductorId) accion) async {
+    // La sesión se comprueba aquí, y no en un getter con `!`: si expiró,
+    // se avisa y se vuelve al inicio en vez de reventar sin mensaje.
+    final conductor = usuarioEnSesion(context);
+    if (conductor == null) return;
 
-  Future<void> _responder(Future<void> Function() accion) async {
     setState(() => _enviando = true);
     try {
-      await accion();
+      await accion(conductor.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -77,23 +79,25 @@ class _ContraofertaPageState extends State<ContraofertaPage> {
   }
 
   Future<void> _aceptar() => _responder(
-        () => ServiceLocator.aceptarSolicitud(widget.solicitudId, _conductorId),
+        (conductorId) =>
+            ServiceLocator.aceptarSolicitud(widget.solicitudId, conductorId),
       );
 
   Future<void> _contraofertar() {
     if (!_formKey.currentState!.validate()) return Future.value();
     final tarifa = double.parse(_tarifaController.text.trim());
     return _responder(
-      () => ServiceLocator.contraofertarSolicitud(
+      (conductorId) => ServiceLocator.contraofertarSolicitud(
         widget.solicitudId,
-        _conductorId,
+        conductorId,
         tarifa,
       ),
     );
   }
 
   Future<void> _rechazar() => _responder(
-        () => ServiceLocator.rechazarSolicitud(widget.solicitudId, _conductorId),
+        (conductorId) =>
+            ServiceLocator.rechazarSolicitud(widget.solicitudId, conductorId),
       );
 
   @override
