@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/enums/rol_usuario.dart';
 import 'package:mobile/core/error/exceptions.dart';
+import 'package:mobile/core/utils/validaciones.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/auth/domain/entities/usuario_entity.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/profile/domain/entities/mototaxista_entity.dart';
+import 'package:mobile/shared/widgets/campo_contrasena.dart';
 import 'package:provider/provider.dart';
 
 class RegistroMototaxistaPage extends StatefulWidget {
@@ -89,14 +91,11 @@ class _RegistroMototaxistaPageState extends State<RegistroMototaxistaPage> {
                           (v == null || v.isEmpty) ? 'Ingresa tu correo' : null,
                     ),
                     const SizedBox(height: 16),
-                    TextFormField(
+                    CampoContrasena(
                       controller: _contrasenaController,
-                      decoration:
-                          const InputDecoration(labelText: 'Contraseña'),
-                      obscureText: true,
-                      validator: (v) => (v == null || v.length < 4)
-                          ? 'Mínimo 4 caracteres'
-                          : null,
+                      esRegistro: true,
+                      ayuda: 'Mínimo 8 caracteres. Evita contraseñas comunes.',
+                      validator: Validaciones.contrasena,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(

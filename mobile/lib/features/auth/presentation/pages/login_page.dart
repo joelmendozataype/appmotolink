@@ -4,6 +4,7 @@ import 'package:mobile/core/enums/rol_usuario.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/shared/widgets/campo_contrasena.dart';
 import 'package:provider/provider.dart';
 
 class LoginPage extends StatefulWidget {
@@ -107,10 +108,8 @@ class _LoginPageState extends State<LoginPage> {
                         (v == null || v.isEmpty) ? 'Ingresa tu correo' : null,
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
+                  CampoContrasena(
                     controller: _contrasenaController,
-                    decoration: const InputDecoration(labelText: 'Contraseña'),
-                    obscureText: true,
                     validator: (v) => (v == null || v.isEmpty)
                         ? 'Ingresa tu contraseña'
                         : null,
