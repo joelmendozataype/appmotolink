@@ -60,6 +60,16 @@ class _LoginPageState extends State<LoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Correo o contraseña incorrectos')),
       );
+    } catch (e) {
+      // Los fallos de red no son ServerException: sin esta rama se
+      // quedaban sin mensaje y el usuario no sabía qué había pasado.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensajeDeError(e)),
+          duration: const Duration(seconds: 6),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _cargando = false);
     }

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:mobile/core/constants/api_constants.dart';
@@ -56,31 +58,53 @@ class ApiClient {
     );
   }
 
-  Future<dynamic> get(String path) async {
-    final response = await _client.get(_uri(path), headers: _headers);
-    return _decode(response);
+  /// Tope de espera por petición.
+  ///
+  /// Generoso a propósito: el backend corre en un plan gratuito que
+  /// suspende la instancia por inactividad, y despertarla ronda el minuto.
+  /// Sin este tope, `package:http` espera indefinidamente y la pantalla se
+  /// queda girando sin decir nada — que es exactamente lo que pasaba.
+  static const Duration _espera = Duration(seconds: 90);
+
+  /// Envuelve cada llamada para que ningún fallo de red quede mudo.
+  Future<dynamic> _enviar(Future<http.Response> Function() peticion) async {
+    try {
+      return _decode(await peticion().timeout(_espera));
+    } on TimeoutException {
+      throw NetworkException(
+        'El servidor tardó demasiado en responder. Puede estar despertando; '
+        'espera unos segundos y vuelve a intentarlo.',
+      );
+    } on SocketException {
+      throw NetworkException(
+        'No se pudo conectar con el servidor. Revisa tu conexión a internet.',
+      );
+    } on http.ClientException {
+      throw NetworkException(
+        'Se interrumpió la conexión con el servidor. Intenta de nuevo.',
+      );
+    }
   }
 
-  Future<dynamic> post(String path, Map<String, dynamic> body) async {
-    final response = await _client.post(
-      _uri(path),
-      headers: _headers,
-      body: jsonEncode(body),
-    );
-    return _decode(response);
-  }
+  Future<dynamic> get(String path) =>
+      _enviar(() => _client.get(_uri(path), headers: _headers));
 
-  Future<dynamic> put(String path, Map<String, dynamic> body) async {
-    final response = await _client.put(
-      _uri(path),
-      headers: _headers,
-      body: jsonEncode(body),
-    );
-    return _decode(response);
-  }
+  Future<dynamic> post(String path, Map<String, dynamic> body) => _enviar(
+        () => _client.post(
+          _uri(path),
+          headers: _headers,
+          body: jsonEncode(body),
+        ),
+      );
 
-  Future<dynamic> delete(String path) async {
-    final response = await _client.delete(_uri(path), headers: _headers);
-    return _decode(response);
-  }
+  Future<dynamic> put(String path, Map<String, dynamic> body) => _enviar(
+        () => _client.put(
+          _uri(path),
+          headers: _headers,
+          body: jsonEncode(body),
+        ),
+      );
+
+  Future<dynamic> delete(String path) =>
+      _enviar(() => _client.delete(_uri(path), headers: _headers));
 }
