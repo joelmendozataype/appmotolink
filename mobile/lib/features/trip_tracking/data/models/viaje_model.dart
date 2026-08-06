@@ -10,7 +10,17 @@ class ViajeModel extends Viaje {
     required super.conductor,
     required super.tarifaFinal,
     required super.estado,
+    super.creadoEn,
+    super.finalizadoEn,
+    super.duracionMinutos,
   });
+
+  /// Las fechas pueden faltar: los viajes migrados desde la base anterior
+  /// no las tienen, y `finalizado_en` no existe hasta que el viaje cierra.
+  static DateTime? _fecha(dynamic valor) {
+    if (valor == null) return null;
+    return DateTime.tryParse(valor as String)?.toLocal();
+  }
 
   factory ViajeModel.fromJson(Map<String, dynamic> json) {
     return ViajeModel(
@@ -21,6 +31,9 @@ class ViajeModel extends Viaje {
           MototaxistaModel.fromJson(json['conductor'] as Map<String, dynamic>),
       tarifaFinal: (json['tarifa_final'] as num).toDouble(),
       estado: EstadoViaje.values.byName(json['estado'] as String),
+      creadoEn: _fecha(json['creado_en']),
+      finalizadoEn: _fecha(json['finalizado_en']),
+      duracionMinutos: (json['duracion_minutos'] as num?)?.toInt(),
     );
   }
 

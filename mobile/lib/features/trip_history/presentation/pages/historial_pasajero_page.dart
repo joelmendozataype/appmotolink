@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/enums/estado_viaje.dart';
 import 'package:mobile/core/error/exceptions.dart';
+import 'package:mobile/core/utils/formato_fecha.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/trip_tracking/domain/entities/viaje_entity.dart';
 import 'package:mobile/shared/widgets/async_state_view.dart';
@@ -64,6 +65,15 @@ class _HistorialPasajeroPageState extends State<HistorialPasajeroPage> {
     }
   }
 
+  /// Estado, fecha y —si el viaje ya terminó— cuánto duró.
+  String _detalle(Viaje viaje) {
+    final duracion = FormatoFecha.duracion(viaje.duracionMinutos);
+    final segunda = duracion == null
+        ? FormatoFecha.legible(viaje.creadoEn)
+        : '${FormatoFecha.legible(viaje.creadoEn)} · $duracion';
+    return '${_etiquetaEstado(viaje.estado)}\n$segunda';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -84,7 +94,8 @@ class _HistorialPasajeroPageState extends State<HistorialPasajeroPage> {
               child: ListTile(
                 leading: const Icon(Icons.two_wheeler),
                 title: Text(viaje.conductor.usuario.nombre),
-                subtitle: Text(_etiquetaEstado(viaje.estado)),
+                subtitle: Text(_detalle(viaje)),
+                isThreeLine: true,
                 trailing: Text(
                   'S/ ${viaje.tarifaFinal.toStringAsFixed(2)}',
                   style: const TextStyle(fontWeight: FontWeight.bold),

@@ -1,6 +1,6 @@
 """Repositorios de solicitudes y viajes sobre Firestore."""
 from core.firestore import Filtro, get_store
-from core.firestore.campos import a_decimal, a_float, a_texto_id
+from core.firestore.campos import a_datetime, a_decimal, a_float, a_texto_id, ahora
 from core.firestore.colecciones import SOLICITUDES, VIAJES
 from trips.domain.entities import EstadoSolicitud, EstadoViaje, SolicitudViaje, Viaje
 from trips.domain.repositories import (
@@ -41,6 +41,7 @@ class FirestoreSolicitudViajeRepository(SolicitudViajeRepository):
             'destino': solicitud.destino,
             'tarifa_propuesta': a_float(solicitud.tarifa_propuesta),
             'estado': str(solicitud.estado),
+            'creado_en': solicitud.creado_en,
         }
 
     def _a_entidad(self, doc_id, datos, *, con_pasajero=True):
@@ -51,6 +52,7 @@ class FirestoreSolicitudViajeRepository(SolicitudViajeRepository):
             destino=datos.get('destino', ''),
             tarifa_propuesta=a_decimal(datos.get('tarifa_propuesta')),
             estado=datos.get('estado', EstadoSolicitud.PENDIENTE),
+            creado_en=a_datetime(datos.get('creado_en')),
         )
         if con_pasajero and solicitud.pasajero_id:
             try:
@@ -69,6 +71,7 @@ class FirestoreSolicitudViajeRepository(SolicitudViajeRepository):
             destino=destino,
             tarifa_propuesta=a_decimal(tarifa_propuesta),
             estado=EstadoSolicitud.PENDIENTE,
+            creado_en=ahora(),
         )
         solicitud.pasajero = pasajero if hasattr(pasajero, 'nombre') else None
         self.store.set(SOLICITUDES, solicitud.id, self._a_documento(solicitud))
@@ -154,6 +157,8 @@ class FirestoreViajeRepository(ViajeRepository):
             'conductor_id': a_texto_id(viaje.conductor_id),
             'tarifa_final': a_float(viaje.tarifa_final),
             'estado': str(viaje.estado),
+            'creado_en': viaje.creado_en,
+            'finalizado_en': viaje.finalizado_en,
         }
 
     def _a_entidad(self, doc_id, datos, *, hidratar=True):
@@ -164,6 +169,8 @@ class FirestoreViajeRepository(ViajeRepository):
             conductor_id=datos.get('conductor_id'),
             tarifa_final=a_decimal(datos.get('tarifa_final')),
             estado=datos.get('estado', EstadoViaje.ASIGNADO),
+            creado_en=a_datetime(datos.get('creado_en')),
+            finalizado_en=a_datetime(datos.get('finalizado_en')),
         )
         if not hidratar:
             # El llamador hidrata en lote (ver _hidratar).
@@ -187,6 +194,7 @@ class FirestoreViajeRepository(ViajeRepository):
             conductor_id=a_texto_id(getattr(conductor, 'usuario_id', conductor)),
             tarifa_final=a_decimal(tarifa_final),
             estado=EstadoViaje.ASIGNADO,
+            creado_en=ahora(),
         )
         viaje.solicitud = solicitud if hasattr(solicitud, 'origen') else None
         viaje.pasajero = pasajero if hasattr(pasajero, 'nombre') else None
@@ -216,6 +224,14 @@ class FirestoreViajeRepository(ViajeRepository):
         for viaje in viajes:
             viaje.pasajero = pasajeros.get(a_texto_id(viaje.pasajero_id))
             viaje.conductor = conductores.get(a_texto_id(viaje.conductor_id))
+
+        # Más recientes primero, que es como se espera leer un historial.
+        # Los viajes migrados desde SQLite no tienen fecha (aquella base no
+        # la guardaba) y quedan al final, en vez de romper la comparación.
+        viajes.sort(
+            key=lambda v: (v.creado_en is not None, v.creado_en),
+            reverse=True,
+        )
         return viajes
 
     def listar(self):

@@ -12,13 +12,17 @@ from users.infrastructure.serializers import MototaxistaSerializer, UsuarioSeria
 
 class SolicitudViajeSerializer(serializers.Serializer):
     id = serializers.CharField(read_only=True)
-    pasajero = serializers.CharField(source='pasajero_id')
+    # Solo lectura: el pasajero sale de la sesión, no del cuerpo. La app
+    # todavía lo envía y no pasa nada —se ignora—, pero exigirlo carecía
+    # de sentido desde que dejó de usarse.
+    pasajero = serializers.CharField(source='pasajero_id', read_only=True)
     origen = serializers.CharField(max_length=255)
     destino = serializers.CharField(max_length=255)
     tarifa_propuesta = serializers.DecimalField(max_digits=8, decimal_places=2)
     estado = serializers.ChoiceField(
         choices=EstadoSolicitud.valores(), read_only=True,
     )
+    creado_en = serializers.DateTimeField(read_only=True)
 
 
 class ViajeSerializer(serializers.Serializer):
@@ -30,3 +34,8 @@ class ViajeSerializer(serializers.Serializer):
         max_digits=8, decimal_places=2, read_only=True,
     )
     estado = serializers.ChoiceField(choices=EstadoViaje.valores(), read_only=True)
+    creado_en = serializers.DateTimeField(read_only=True)
+    finalizado_en = serializers.DateTimeField(read_only=True)
+    # Se calcula en el servidor para que app y panel no dupliquen la
+    # fórmula ni discrepen por zonas horarias.
+    duracion_minutos = serializers.IntegerField(read_only=True)

@@ -12,6 +12,7 @@ from rest_framework.viewsets import ViewSet
 from rest_framework.permissions import IsAuthenticated
 
 from core import di
+from core.firestore.campos import ahora
 from core.permissions import (
     EsMototaxista,
     EsPasajero,
@@ -203,6 +204,9 @@ class ViajeViewSet(ViewSet):
         if not participa_en_viaje(request.user, viaje):
             return _prohibido('No participas en este viaje.')
         viaje.estado = EstadoViaje.FINALIZADO
+        # Se sella al cerrar, no al consultar: es la marca con la que se
+        # calcula cuánto duró el viaje.
+        viaje.finalizado_en = ahora()
         repo.guardar(viaje)
         return Response(ViajeSerializer(viaje).data)
 
