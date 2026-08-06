@@ -57,6 +57,15 @@ class ServiceLocator {
   static final registrarUsuario = RegistrarUsuario(_usuarioRepo);
   static final obtenerUsuarioActual = ObtenerUsuarioActual(_usuarioRepo);
   static final logoutUsuario = LogoutUsuario(_usuarioRepo);
+
+  static Future<void> pedirCodigoRecuperacion(String correo) =>
+      _usuarioDs.pedirCodigoRecuperacion(correo);
+  static Future<void> restablecerContrasena(
+    String correo,
+    String codigo,
+    String contrasena,
+  ) =>
+      _usuarioDs.restablecerContrasena(correo, codigo, contrasena);
   static final listarUsuarios = ListarUsuarios(_usuarioRepo);
   static final listarPasajeros = ListarPasajeros(_usuarioRepo);
   static final eliminarUsuario = EliminarUsuario(_usuarioRepo);

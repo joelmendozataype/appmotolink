@@ -251,6 +251,22 @@ class _LoginPageState extends State<LoginPage> {
                     : null,
               ),
               const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () =>
+                      context.push(AppRoutes.recuperarContrasena),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                  ),
+                  child: const Text(
+                    '¿Olvidaste tu contraseña?',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ),
+              ),
               _recordarmeFila(context),
               const SizedBox(height: 12),
               _botonIngresar(context),

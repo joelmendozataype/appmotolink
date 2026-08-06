@@ -6,6 +6,14 @@ abstract class UsuarioRemoteDataSource {
   Future<UsuarioModel> login(String correo, String contrasena);
   Future<UsuarioModel> registrar(UsuarioModel usuario);
   Future<void> logout();
+
+  Future<void> pedirCodigoRecuperacion(String correo);
+
+  Future<void> restablecerContrasena(
+    String correo,
+    String codigo,
+    String contrasena,
+  );
   Future<UsuarioModel> obtenerUsuarioActual();
   Future<UsuarioModel> actualizarUsuario(UsuarioModel usuario);
   Future<List<UsuarioModel>> listarTodos();
@@ -38,6 +46,26 @@ class UsuarioRemoteDataSourceImpl implements UsuarioRemoteDataSource {
   @override
   Future<void> logout() async {
     await client.post('${ApiConstants.usuarios}/logout', {});
+  }
+
+  @override
+  Future<void> pedirCodigoRecuperacion(String correo) async {
+    await client.post(
+      '${ApiConstants.usuarios}/recuperar', {'correo': correo},
+    );
+  }
+
+  @override
+  Future<void> restablecerContrasena(
+    String correo,
+    String codigo,
+    String contrasena,
+  ) async {
+    await client.post('${ApiConstants.usuarios}/restablecer', {
+      'correo': correo,
+      'codigo': codigo,
+      'contrasena': contrasena,
+    });
   }
 
   @override

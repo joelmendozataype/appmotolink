@@ -8,6 +8,9 @@ class AppRoutes {
   static const roleSelection = '/role-selection';
   static const roleSelectionName = 'roleSelection';
 
+  static const recuperarContrasena = '/recuperar-contrasena';
+  static const recuperarContrasenaName = 'recuperarContrasena';
+
   static const login = '/login/:rol';
   static const loginName = 'login';
   static String loginPath(String rol) => '/login/$rol';

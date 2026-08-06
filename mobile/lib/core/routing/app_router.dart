@@ -15,6 +15,7 @@ import 'package:mobile/features/negotiation/domain/entities/oferta_entity.dart';
 import 'package:mobile/features/negotiation/presentation/pages/conductor_seleccionado_page.dart';
 import 'package:mobile/features/negotiation/presentation/pages/contraoferta_page.dart';
 import 'package:mobile/features/negotiation/presentation/pages/ofertas_recibidas_page.dart';
+import 'package:mobile/features/auth/presentation/pages/recuperar_contrasena_page.dart';
 import 'package:mobile/features/onboarding/presentation/pages/splash_page.dart';
 import 'package:mobile/features/passenger_home/presentation/pages/inicio_pasajero_page.dart';
 import 'package:mobile/features/rating/presentation/pages/calificacion_page.dart';
@@ -32,6 +33,11 @@ class AppRouter {
     initialLocation: AppRoutes.splash,
     routes: [
       // ---------------- Autenticación ----------------
+      GoRoute(
+        path: AppRoutes.recuperarContrasena,
+        name: AppRoutes.recuperarContrasenaName,
+        builder: (context, state) => const RecuperarContrasenaPage(),
+      ),
       GoRoute(
         path: AppRoutes.splash,
         name: AppRoutes.splashName,

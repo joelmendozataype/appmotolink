@@ -120,6 +120,7 @@ REST_FRAMEWORK = {
         'login': '10/min',          # por cuenta atacada
         'login_origen': '30/min',   # por origen, más holgado
         'registro': '20/hour',
+        'recuperar': '3/hour',   # por cuenta: evita llenar buzones
     },
     # Detrás del proxy de Render la IP real del cliente llega en
     # X-Forwarded-For. Sin este ajuste DRF usa la cabecera entera, y si la
@@ -200,6 +201,24 @@ MOTOLINK_PUSH = os.environ.get('MOTOLINK_PUSH', 'on').lower() != 'off'
 # Cuentas de servicio > Generar nueva clave privada.
 FIREBASE_CREDENTIALS_FILE = os.environ.get('FIREBASE_CREDENTIALS_FILE', '')
 FIREBASE_PROJECT_ID = os.environ.get('FIREBASE_PROJECT_ID', '')
+
+# Correo, para los códigos de recuperación de contraseña.
+#
+# Sin SMTP configurado se usa la consola: el código se imprime en el log
+# en vez de enviarse. Sirve para desarrollo, pero en producción hay que
+# poner un servidor de verdad o nadie recibirá nada.
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+if EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+    EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DEFAULT_FROM_EMAIL', 'MotoLink <no-responder@motolink.pe>',
+)
 
 # Sesiones firmadas en cookie: no necesitan tabla django_session, así que
 # el login tampoco depende de SQL.
