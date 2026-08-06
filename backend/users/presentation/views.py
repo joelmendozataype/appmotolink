@@ -13,6 +13,7 @@ from rest_framework.viewsets import ViewSet
 from core import di
 from core.authentication import SESSION_KEY
 from core.permissions import EsAdministrador, es_administrador
+from core.throttling import LoginPorCuentaThrottle, LoginPorOrigenThrottle
 from users.domain.entities import RolUsuario
 from users.domain.repositories import (
     MototaxistaNoEncontradoError,
@@ -51,11 +52,12 @@ class UsuarioViewSet(ViewSet):
 
     def get_throttles(self):
         if self.action == 'login':
-            self.throttle_scope = 'login'
-        elif self.action == 'create':
-            self.throttle_scope = 'registro'
-        else:
+            # Dos barreras: por cuenta atacada y por origen. La primera no
+            # depende de acertar la IP del cliente, que es justo lo que
+            # falló en producción detrás del proxy.
             self.throttle_scope = None
+            return [LoginPorCuentaThrottle(), LoginPorOrigenThrottle()]
+        self.throttle_scope = 'registro' if self.action == 'create' else None
         return super().get_throttles()
 
     def list(self, request):

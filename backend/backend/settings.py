@@ -117,9 +117,16 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'login': '10/min',
+        'login': '10/min',          # por cuenta atacada
+        'login_origen': '30/min',   # por origen, más holgado
         'registro': '20/hour',
     },
+    # Detrás del proxy de Render la IP real del cliente llega en
+    # X-Forwarded-For. Sin este ajuste DRF usa la cabecera entera, y si la
+    # cadena de proxies varía cada petición cae en un contador distinto:
+    # así fue como el límite del login dejó de aplicarse en producción
+    # mientras seguía funcionando en local.
+    'NUM_PROXIES': int(os.environ.get('DJANGO_NUM_PROXIES', '1')),
     # Por defecto DRF serializa DecimalField como string (ej. "9.00") para
     # no perder precisión. El cliente Dart espera num en tarifas (tarifa_propuesta,
     # tarifa_final, tarifa de Oferta); con el valor por defecto el cast

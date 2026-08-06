@@ -8,6 +8,7 @@ Cada test arranca con un almacén en memoria vacío, igual que antes cada
 test arrancaba con una base de datos de test recién creada.
 """
 from django.conf import settings
+from django.core.cache import cache
 from django.test import SimpleTestCase, override_settings
 
 from core.authentication import SESSION_KEY
@@ -35,6 +36,11 @@ class FirestoreTestCase(SimpleTestCase):
         super().setUp()
         self.store = InMemoryDocumentStore()
         set_store(self.store)
+        # Los contadores de los límites de frecuencia viven en la caché,
+        # que es global al proceso: sin limpiarla, los intentos de un test
+        # se sumarían a los del siguiente y la suite fallaría según el
+        # orden en que se ejecute.
+        cache.clear()
 
     # --- fixtures habituales ------------------------------------------
 
