@@ -4,9 +4,8 @@ import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/enums/estado_solicitud.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
-import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/core/utils/sesion_guard.dart';
 import 'package:mobile/features/trip_request/domain/entities/solicitud_viaje_entity.dart';
-import 'package:provider/provider.dart';
 
 class ProponerTarifaPage extends StatefulWidget {
   final String origen;
@@ -30,7 +29,9 @@ class _ProponerTarifaPageState extends State<ProponerTarifaPage> {
   Future<void> _enviarSolicitud() async {
     if (!_formKey.currentState!.validate()) return;
     final tarifa = double.parse(_tarifaController.text.trim());
-    final pasajeroId = context.read<AuthProvider>().usuarioActual!.id;
+    final pasajero = usuarioEnSesion(context);
+    if (pasajero == null) return;
+    final pasajeroId = pasajero.id;
 
     setState(() => _cargando = true);
     try {

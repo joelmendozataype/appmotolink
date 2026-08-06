@@ -109,62 +109,66 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
           ? ErrorRetryView(mensaje: _error!, onRetry: _cargarViaje)
           : viaje == null
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Expanded(
-                  child: Container(
-                    color: Colors.teal.shade50,
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.gps_fixed, size: 80, color: Colors.teal),
-                          const SizedBox(height: 8),
-                          Text(_textoSeguimientoGps()),
-                        ],
-                      ),
-                    ),
-                  ),
+          : Container(
+              color: Colors.teal.shade50,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.gps_fixed, size: 80, color: Colors.teal),
+                    const SizedBox(height: 8),
+                    Text(_textoSeguimientoGps()),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ListTile(
-                        leading:
-                            const CircleAvatar(child: Icon(Icons.two_wheeler)),
-                        title: Text(viaje.conductor.usuario.nombre),
-                        subtitle: Text(
-                          '${viaje.conductor.marcaVehiculo} ${viaje.conductor.modeloVehiculo} · ${viaje.conductor.placa}',
-                        ),
-                        trailing: Text(
-                          'S/ ${viaje.tarifaFinal.toStringAsFixed(2)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        icon: const Icon(Icons.flag),
-                        label: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: _finalizando
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text('Finalizar viaje'),
-                        ),
-                        onPressed: _finalizando ? null : _finalizarViaje,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
+      // Los datos del conductor y el botón van en bottomNavigationBar, no
+      // dentro del body: Flutter dibuja los SnackBar por encima del body
+      // pero por debajo de esta barra, así que el botón "Finalizar viaje"
+      // nunca queda tapado por una notificación.
+      bottomNavigationBar: (_error != null || viaje == null)
+          ? null
+          : _barraInferior(viaje),
+    );
+  }
+
+  Widget _barraInferior(Viaje viaje) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.two_wheeler)),
+              title: Text(viaje.conductor.usuario.nombre),
+              subtitle: Text(
+                '${viaje.conductor.marcaVehiculo} ${viaje.conductor.modeloVehiculo} · ${viaje.conductor.placa}',
+              ),
+              trailing: Text(
+                'S/ ${viaje.tarifaFinal.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              icon: const Icon(Icons.flag),
+              label: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: _finalizando
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Finalizar viaje'),
+              ),
+              onPressed: _finalizando ? null : _finalizarViaje,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
