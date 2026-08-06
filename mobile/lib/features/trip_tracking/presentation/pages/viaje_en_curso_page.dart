@@ -9,6 +9,7 @@ import 'package:mobile/core/location/location_service.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/trip_tracking/domain/entities/viaje_entity.dart';
 import 'package:mobile/shared/widgets/error_retry_view.dart';
+import 'package:mobile/shared/widgets/mapa_viaje.dart';
 
 class ViajeEnCursoPage extends StatefulWidget {
   final String viajeId;
@@ -26,6 +27,7 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
 
   Position? _posicionInicial;
   Position? _posicionActual;
+  final List<Position> _recorrido = [];
   StreamSubscription<Position>? _suscripcionUbicacion;
 
   @override
@@ -64,10 +66,15 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
       setState(() {
         _posicionInicial = inicial;
         _posicionActual = inicial;
+        _recorrido.add(inicial);
       });
       _suscripcionUbicacion = LocationCalculos.seguirUbicacion().listen((pos) {
         if (!mounted) return;
-        setState(() => _posicionActual = pos);
+        setState(() {
+          _posicionActual = pos;
+          // Se acumula para dibujar el trazo del recorrido en el mapa.
+          _recorrido.add(pos);
+        });
       });
     } on LocationPermissionDeniedException {
       // GPS desactivado o permiso denegado: el viaje continúa sin el
@@ -109,18 +116,11 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
           ? ErrorRetryView(mensaje: _error!, onRetry: _cargarViaje)
           : viaje == null
           ? const Center(child: CircularProgressIndicator())
-          : Container(
-              color: Colors.teal.shade50,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.gps_fixed, size: 80, color: Colors.teal),
-                    const SizedBox(height: 8),
-                    Text(_textoSeguimientoGps()),
-                  ],
-                ),
-              ),
+          : MapaViaje(
+              posicion: _posicionActual,
+              recorrido: _recorrido,
+              icono: Icons.person_pin_circle,
+              leyenda: _textoSeguimientoGps(),
             ),
       // Los datos del conductor y el botón van en bottomNavigationBar, no
       // dentro del body: Flutter dibuja los SnackBar por encima del body

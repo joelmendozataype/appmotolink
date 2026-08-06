@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/error/exceptions.dart';
+import 'package:mobile/core/location/location_service.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/trip_tracking/domain/entities/viaje_entity.dart';
 import 'package:mobile/shared/widgets/error_retry_view.dart';
+import 'package:mobile/shared/widgets/mapa_viaje.dart';
 
 class ViajeAsignadoPage extends StatefulWidget {
   final String viajeId;
@@ -20,10 +25,44 @@ class _ViajeAsignadoPageState extends State<ViajeAsignadoPage> {
   String? _error;
   bool _finalizando = false;
 
+  Position? _posicionActual;
+  final List<Position> _recorrido = [];
+  StreamSubscription<Position>? _suscripcionUbicacion;
+
   @override
   void initState() {
     super.initState();
     _cargarViaje();
+    _iniciarSeguimientoGps();
+  }
+
+  @override
+  void dispose() {
+    _suscripcionUbicacion?.cancel();
+    super.dispose();
+  }
+
+  /// El conductor ve su propia posición sobre el mapa mientras lleva al
+  /// pasajero. Si el permiso está denegado, el viaje sigue funcionando:
+  /// el mapa se queda centrado sin marcador, y nada más.
+  Future<void> _iniciarSeguimientoGps() async {
+    try {
+      final inicial = await LocationService.obtenerUbicacionActual();
+      if (!mounted) return;
+      setState(() {
+        _posicionActual = inicial;
+        _recorrido.add(inicial);
+      });
+      _suscripcionUbicacion = LocationCalculos.seguirUbicacion().listen((pos) {
+        if (!mounted) return;
+        setState(() {
+          _posicionActual = pos;
+          _recorrido.add(pos);
+        });
+      });
+    } on LocationPermissionDeniedException {
+      // Sin GPS el viaje continúa igual; no es un error bloqueante.
+    }
   }
 
   Future<void> _cargarViaje() async {
@@ -62,18 +101,10 @@ class _ViajeAsignadoPageState extends State<ViajeAsignadoPage> {
           ? ErrorRetryView(mensaje: _error!, onRetry: _cargarViaje)
           : viaje == null
           ? const Center(child: CircularProgressIndicator())
-          : Container(
-              color: Colors.teal.shade50,
-              child: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.map, size: 80, color: Colors.teal),
-                    SizedBox(height: 8),
-                    Text('Mapa en vivo (simulado)'),
-                  ],
-                ),
-              ),
+          : MapaViaje(
+              posicion: _posicionActual,
+              recorrido: _recorrido,
+              icono: Icons.two_wheeler,
             ),
       // Ver la nota en viaje_en_curso_page: al vivir en bottomNavigationBar,
       // el botón queda por encima de cualquier SnackBar en vez de debajo.
