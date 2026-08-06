@@ -63,7 +63,23 @@ genera Render sola.
 
 ## 4. Desplegar y comprobar
 
-El primer despliegue tarda unos minutos. Cuando termine, prueba:
+El primer despliegue tarda bastante: la compilación de las dependencias
+de Firebase no es rápida en el plan gratuito.
+
+Render no te dará el dominio que pediste, sino uno con sufijo, del estilo
+`motolink-api-XXXX.onrender.com`. Lo ves arriba en la página del
+servicio. Cópialo, porque hace falta para los siguientes pasos.
+
+Comprueba primero la ruta de salud, que es pública:
+
+```bash
+curl -i https://TU-SERVICIO.onrender.com/api/salud/
+```
+
+Debe responder **200** con `{"estado":"ok"}`. Es la misma ruta que usa el
+health check de Render.
+
+Y ahora una de verdad:
 
 ```bash
 curl -i https://TU-SERVICIO.onrender.com/api/solicitudes-viaje/
@@ -71,6 +87,12 @@ curl -i https://TU-SERVICIO.onrender.com/api/solicitudes-viaje/
 
 Debe responder **403**. Eso es señal de que va bien: la API exige sesión.
 Si respondiera 200 con datos, algo está mal configurado.
+
+### Ajusta DJANGO_CORS_ORIGINS
+
+Como el dominio real no se conoce hasta ahora, ve a *Environment* y
+corrige `DJANGO_CORS_ORIGINS` con el dominio que te tocó. Solo importa si
+vas a servir la versión web; para el APK es indiferente.
 
 Para comprobar el camino completo, crea un usuario y entra:
 
@@ -110,8 +132,10 @@ tráfico, y la siguiente petición tarda cerca de un minuto en responder.
 Además, las conexiones de Socket.IO abiertas se cortan.
 
 La forma habitual de evitarlo durante una temporada de pruebas es un
-monitor gratuito, por ejemplo UptimeRobot, que pida
-`/api/solicitudes-viaje/` cada 10 minutos. Un mes de servicio despierto
+monitor gratuito, por ejemplo UptimeRobot, que pida `/api/salud/` cada
+10 minutos. Conviene esa ruta y no otra: es pública, responde 200 y no
+consulta Firestore, así que el monitor no gasta cuota de lecturas ni
+llena los logs de 403. Un mes de servicio despierto
 son unas 720 horas, dentro de lo que incluye el plan gratuito, pero
 conviene que verifiques los límites vigentes: cambian con el tiempo.
 

@@ -17,8 +17,13 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from core.views import salud
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Única ruta pública de la API: la usa el health check de la
+    # plataforma, que marca el despliegue como caído si recibe un 403.
+    path('api/salud/', salud, name='salud'),
     path('api/', include('users.urls')),
     path('api/', include('trips.urls')),
     path('api/', include('negotiation.urls')),

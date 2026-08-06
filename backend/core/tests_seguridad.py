@@ -52,6 +52,20 @@ class SinSesionTests(FirestoreTestCase):
         # La cuenta sigue existiendo.
         self.assertIsNotNone(self.usuarios.buscar_por_correo('ana.sec@motolink.com'))
 
+    def test_la_ruta_de_salud_responde_200_sin_sesion(self):
+        """El health check de Render marca el despliegue como fallido si no
+        recibe un 2xx. Con /api/solicitudes-viaje/ como ruta de salud, el
+        403 de la API tumbaba el despliegue entero: fallo real en el
+        primer intento de publicar."""
+        respuesta = self.anonimo.get('/api/salud/')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.data['estado'], 'ok')
+
+    def test_la_ruta_de_salud_no_filtra_datos(self):
+        """Ser pública no la convierte en una puerta trasera."""
+        respuesta = self.anonimo.get('/api/salud/')
+        self.assertEqual(set(respuesta.data), {'estado', 'servicio'})
+
     def test_el_registro_y_el_login_siguen_abiertos(self):
         """Sin estas dos puertas nadie podría llegar a tener sesión."""
         alta = self.anonimo.post(

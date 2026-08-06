@@ -30,7 +30,9 @@ services:
     #                responde nunca, sin error ni log.
     startCommand: "gunicorn backend.wsgi:application --worker-class gthread --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT"
 
-    healthCheckPath: /api/solicitudes-viaje/
+    # Debe responder 2xx SIN sesión: Render da el despliegue por fallido
+    # si recibe cualquier otra cosa, y el resto de la API devuelve 403.
+    healthCheckPath: /api/salud/
 
     envVars:
       - key: PYTHON_VERSION
