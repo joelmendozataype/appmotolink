@@ -97,6 +97,11 @@ class NotificadorConPush(SocketIORealtimeNotifier):
             {'tipo': 'ViajeAsignado', 'viajeId': viaje.id},
         )
 
+    def notificar_viaje_finalizado(self, viaje):
+        super().notificar_viaje_finalizado(viaje)
+        # Sin push aquí: el viaje terminó bien y ambos suelen tener la app
+        # delante. Una notificación del sistema sobraría.
+
     def notificar_viaje_cancelado(self, viaje):
         super().notificar_viaje_cancelado(viaje)
         # A las dos partes: quien canceló ya lo sabe, pero no se sabe cuál

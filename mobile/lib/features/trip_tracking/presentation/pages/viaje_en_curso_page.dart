@@ -135,8 +135,12 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
       context.go(AppRoutes.inicioPasajero);
     } catch (e) {
       if (!mounted) return;
+      final mensaje = mensajeDeError(e);
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
+          .showSnackBar(SnackBar(content: Text(mensaje)));
+      if (mensaje.contains('ya fue cerrado')) {
+        context.go(AppRoutes.inicioPasajero);
+      }
     } finally {
       if (mounted) setState(() => _cancelando = false);
     }
@@ -150,8 +154,14 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
       context.pushReplacement(AppRoutes.calificacionPath(widget.viajeId));
     } catch (e) {
       if (!mounted) return;
+      final mensaje = mensajeDeError(e);
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
+          .showSnackBar(SnackBar(content: Text(mensaje)));
+      // Si la otra parte ya lo cerró, quedarse aquí solo lleva a pulsar
+      // botones que no hacen nada.
+      if (mensaje.contains('ya fue cerrado')) {
+        context.go(AppRoutes.inicioPasajero);
+      }
     } finally {
       if (mounted) setState(() => _finalizando = false);
     }

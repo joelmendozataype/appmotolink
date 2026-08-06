@@ -167,4 +167,7 @@ class SocketService {
 
   void onSolicitudCancelada(void Function(dynamic data) handler) =>
       on(SocketEvents.solicitudCancelada, handler);
+
+  void onViajeFinalizado(void Function(dynamic data) handler) =>
+      on(SocketEvents.viajeFinalizado, handler);
 }

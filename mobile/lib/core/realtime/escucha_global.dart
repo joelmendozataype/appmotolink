@@ -32,6 +32,7 @@ class EscuchaGlobal {
     _activa = true;
     SocketService.instance.onViajeAsignado(_onViajeAsignado);
     SocketService.instance.onOfertaAceptada(_onOfertaAceptada);
+    SocketService.instance.onViajeFinalizado(_onViajeFinalizado);
   }
 
   String? get _usuarioId => _auth?.usuarioActual?.id;
@@ -50,6 +51,29 @@ class EscuchaGlobal {
     if (data is! Map) return;
     if (data['conductorId']?.toString() != _usuarioId) return;
     _avisar('¡Un pasajero aceptó tu oferta!');
+  }
+
+  /// El viaje se cerró: quien no pulsó el botón se quedaba en la pantalla
+  /// del viaje con los botones vivos, y al pulsarlos recibía un 409
+  /// "Este viaje ya fue cerrado" sin entender por qué.
+  void _onViajeFinalizado(dynamic data) {
+    if (data is! Map) return;
+    final usuarioId = _usuarioId;
+    final viajeId = data['id']?.toString();
+    if (usuarioId == null || viajeId == null) return;
+
+    final soyPasajero = data['pasajeroId']?.toString() == usuarioId;
+    final soyConductor = data['conductorId']?.toString() == usuarioId;
+    if (!soyPasajero && !soyConductor) return;
+
+    _avisar('El viaje terminó.');
+    // El pasajero pasa a calificar; el conductor vuelve a su inicio a
+    // esperar el siguiente.
+    AppRouter.router.go(
+      soyPasajero
+          ? AppRoutes.calificacionPath(viajeId)
+          : AppRoutes.inicioMototaxista,
+    );
   }
 
   /// El viaje ya existe: se avisa a ambas partes y se lleva a cada una a

@@ -8,6 +8,7 @@ class SocketEvents {
   static const viajeAsignado = 'ViajeAsignado';
   static const solicitudCancelada = 'SolicitudCancelada';
   static const viajeCancelado = 'ViajeCancelado';
+  static const viajeFinalizado = 'ViajeFinalizado';
 }
 
 class SocketRooms {

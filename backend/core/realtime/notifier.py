@@ -36,6 +36,10 @@ class RealtimeNotifier(ABC):
     def notificar_viaje_cancelado(self, viaje):
         ...
 
+    @abstractmethod
+    def notificar_viaje_finalizado(self, viaje):
+        ...
+
 
 def _payload_solicitud(solicitud):
     return {
@@ -131,6 +135,20 @@ class SocketIORealtimeNotifier(RealtimeNotifier):
         sio.emit(
             RealtimeEvents.SOLICITUD_CANCELADA, payload,
             room=room_solicitud(solicitud.id),
+        )
+
+    def notificar_viaje_finalizado(self, viaje):
+        # Sin esto, quien no pulsó "Finalizar" se quedaba en la pantalla
+        # del viaje con los botones vivos, y al pulsarlos recibía un 409
+        # "Este viaje ya fue cerrado" sin entender por qué.
+        payload = _payload_viaje(viaje)
+        sio.emit(
+            RealtimeEvents.VIAJE_FINALIZADO, payload,
+            room=room_usuario(viaje.pasajero_id),
+        )
+        sio.emit(
+            RealtimeEvents.VIAJE_FINALIZADO, payload,
+            room=room_usuario(viaje.conductor_id),
         )
 
     def notificar_viaje_cancelado(self, viaje):

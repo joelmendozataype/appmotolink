@@ -257,8 +257,12 @@ class ViajeViewSet(ViewSet):
 
         viaje.estado = nuevo_estado
         viaje.finalizado_en = momento
+        # Se avisa a la otra parte en ambos casos: si no, se queda en la
+        # pantalla del viaje con botones que ya no hacen nada.
         if nuevo_estado == EstadoViaje.CANCELADO:
             di.notifier().notificar_viaje_cancelado(viaje)
+        else:
+            di.notifier().notificar_viaje_finalizado(viaje)
         return Response(ViajeSerializer(viaje).data)
 
 

@@ -6,6 +6,7 @@ class RealtimeEvents:
     VIAJE_ASIGNADO = 'ViajeAsignado'
     SOLICITUD_CANCELADA = 'SolicitudCancelada'
     VIAJE_CANCELADO = 'ViajeCancelado'
+    VIAJE_FINALIZADO = 'ViajeFinalizado'
 
 
 def room_conductores():

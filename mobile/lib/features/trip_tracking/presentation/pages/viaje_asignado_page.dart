@@ -130,8 +130,12 @@ class _ViajeAsignadoPageState extends State<ViajeAsignadoPage> {
       context.go(AppRoutes.inicioMototaxista);
     } catch (e) {
       if (!mounted) return;
+      final mensaje = mensajeDeError(e);
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
+          .showSnackBar(SnackBar(content: Text(mensaje)));
+      if (mensaje.contains('ya fue cerrado')) {
+        context.go(AppRoutes.inicioMototaxista);
+      }
     } finally {
       if (mounted) setState(() => _cancelando = false);
     }
@@ -145,8 +149,14 @@ class _ViajeAsignadoPageState extends State<ViajeAsignadoPage> {
       context.go(AppRoutes.inicioMototaxista);
     } catch (e) {
       if (!mounted) return;
+      final mensaje = mensajeDeError(e);
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
+          .showSnackBar(SnackBar(content: Text(mensaje)));
+      // Si la otra parte ya lo cerró, quedarse aquí solo lleva a pulsar
+      // botones que no hacen nada.
+      if (mensaje.contains('ya fue cerrado')) {
+        context.go(AppRoutes.inicioMototaxista);
+      }
     } finally {
       if (mounted) setState(() => _finalizando = false);
     }
