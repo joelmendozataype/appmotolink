@@ -47,8 +47,10 @@ class _InicioMototaxistaPageState extends State<InicioMototaxistaPage> {
       // El pasajero puede asignarle el viaje en cualquier momento mientras
       // el conductor espera aquí: se suscribe a su propio canal para
       // saberlo en tiempo real (paso 7 de la negociación).
+      // Solo la sala: del evento ViajeAsignado se encarga EscuchaGlobal,
+      // que funciona desde cualquier pantalla. Si ambos navegaran, se
+      // apilarían dos pantallas de viaje.
       SocketService.instance.joinRoom(SocketRooms.usuario(conductorId));
-      SocketService.instance.onViajeAsignado(_onViajeAsignado);
     }
     // También se suscribe al canal global de conductores para saber de
     // nuevas solicitudes sin necesidad de estar parado en "Solicitudes
@@ -60,7 +62,6 @@ class _InicioMototaxistaPageState extends State<InicioMototaxistaPage> {
 
   @override
   void dispose() {
-    SocketService.instance.off(SocketEvents.viajeAsignado, _onViajeAsignado);
     SocketService.instance.off(SocketEvents.solicitudCreada, _onSolicitudCreada);
     final conductorId = context.read<AuthProvider>().usuarioActual?.id;
     if (conductorId != null) {
@@ -68,16 +69,6 @@ class _InicioMototaxistaPageState extends State<InicioMototaxistaPage> {
     }
     SocketService.instance.leaveRoom(SocketRooms.conductores);
     super.dispose();
-  }
-
-  void _onViajeAsignado(dynamic data) {
-    if (!mounted) return;
-    final viajeId = data['id'] as String?;
-    if (viajeId == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('¡Un pasajero te seleccionó!')),
-    );
-    context.push(AppRoutes.viajeAsignadoPath(viajeId));
   }
 
   void _onSolicitudCreada(dynamic data) {
