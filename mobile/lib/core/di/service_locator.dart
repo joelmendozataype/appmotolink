@@ -1,4 +1,5 @@
 import 'package:mobile/core/network/api_client.dart';
+import 'package:mobile/core/push/dispositivo_datasource.dart';
 import 'package:mobile/features/auth/data/datasources/usuario_remote_datasource.dart';
 import 'package:mobile/features/auth/data/repositories/usuario_repository_impl.dart';
 import 'package:mobile/features/auth/domain/usecases/eliminar_usuario.dart';
@@ -47,6 +48,7 @@ class ServiceLocator {
   ServiceLocator._();
 
   static final ApiClient apiClient = ApiClient();
+  static final _dispositivoDs = DispositivoDataSource(apiClient);
 
   // ---- Auth ----
   static final _usuarioDs = UsuarioRemoteDataSourceImpl(apiClient);
@@ -90,6 +92,11 @@ class ServiceLocator {
   static final obtenerViajePorId = ObtenerViajePorId(_viajeRepo);
   static final finalizarViaje = FinalizarViaje(_viajeRepo);
   static final cancelarViaje = CancelarViaje(_viajeRepo);
+
+  static Future<void> registrarDispositivo(String token) =>
+      _dispositivoDs.registrar(token);
+  static Future<void> darDeBajaDispositivo(String token) =>
+      _dispositivoDs.darDeBaja(token);
   static final listarViajes = ListarViajes(_viajeRepo);
 
   // ---- Trip history (Historial) ----

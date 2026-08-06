@@ -41,3 +41,23 @@ def oferta_repo():
 
 def calificacion_repo():
     return FirestoreCalificacionRepository()
+
+
+def notifier():
+    """Notificador de eventos: Socket.IO y, además, notificaciones push.
+
+    Se resuelve aquí para que vistas y servicios no tengan que saber que
+    hay dos canales. Con MOTOLINK_PUSH desactivado se queda solo en
+    Socket.IO, que es lo que conviene en los tests y en desarrollo para
+    no gastar cuota ni depender de la red.
+    """
+    from django.conf import settings
+
+    if not getattr(settings, 'MOTOLINK_PUSH', True):
+        from core.realtime.notifier import SocketIORealtimeNotifier
+
+        return SocketIORealtimeNotifier()
+
+    from core.push.notificador import NotificadorConPush
+
+    return NotificadorConPush()

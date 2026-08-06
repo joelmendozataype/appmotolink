@@ -43,7 +43,7 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
 
   @override
   void dispose() {
-    SocketService.instance.off(SocketEvents.viajeCancelado);
+    SocketService.instance.off(SocketEvents.viajeCancelado, _onViajeCancelado);
     _suscripcionUbicacion?.cancel();
     super.dispose();
   }
@@ -91,14 +91,16 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
   /// quedarse en un viaje que ya no existe solo lleva a errores al pulsar
   /// finalizar.
   void _escucharCancelacion() {
-    SocketService.instance.on(SocketEvents.viajeCancelado, (data) {
+    SocketService.instance.onViajeCancelado(_onViajeCancelado);
+  }
+
+  void _onViajeCancelado(dynamic data) {
       if (!mounted) return;
       if (data is Map && data['id'] != widget.viajeId) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('La otra persona canceló el viaje')),
       );
       context.go(AppRoutes.inicioPasajero);
-    });
   }
 
   Future<void> _cancelarViaje() async {

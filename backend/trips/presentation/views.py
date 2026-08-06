@@ -19,7 +19,6 @@ from core.permissions import (
     es_administrador,
     participa_en_viaje,
 )
-from core.realtime.notifier import SocketIORealtimeNotifier
 from negotiation.application.services import NegotiationService
 from negotiation.domain.exceptions import (
     OfertaDuplicadaError,
@@ -85,7 +84,7 @@ class SolicitudViajeViewSet(ViewSet):
         serializer.is_valid(raise_exception=True)
 
         usecase = CrearSolicitudViajeUseCase(
-            di.solicitud_repo(), notifier=SocketIORealtimeNotifier(),
+            di.solicitud_repo(), notifier=di.notifier(),
         )
         solicitud = usecase.execute(
             # El pasajero sale de la sesión. El campo 'pasajero' del cuerpo
@@ -140,7 +139,7 @@ class SolicitudViajeViewSet(ViewSet):
             )
 
         solicitud.estado = EstadoSolicitud.CANCELADA
-        SocketIORealtimeNotifier().notificar_solicitud_cancelada(solicitud)
+        di.notifier().notificar_solicitud_cancelada(solicitud)
         return Response(SolicitudViajeSerializer(solicitud).data)
 
     def _conductor_de(self, request):
@@ -259,7 +258,7 @@ class ViajeViewSet(ViewSet):
         viaje.estado = nuevo_estado
         viaje.finalizado_en = momento
         if nuevo_estado == EstadoViaje.CANCELADO:
-            SocketIORealtimeNotifier().notificar_viaje_cancelado(viaje)
+            di.notifier().notificar_viaje_cancelado(viaje)
         return Response(ViajeSerializer(viaje).data)
 
 

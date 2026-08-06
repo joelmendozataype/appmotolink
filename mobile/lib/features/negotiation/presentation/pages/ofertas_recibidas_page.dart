@@ -36,8 +36,8 @@ class _OfertasRecibidasPageState extends State<OfertasRecibidasPage> {
 
   @override
   void dispose() {
-    SocketService.instance.off(SocketEvents.ofertaCreada);
-    SocketService.instance.off(SocketEvents.contraOfertaCreada);
+    SocketService.instance.off(SocketEvents.ofertaCreada, _onNuevaOferta);
+    SocketService.instance.off(SocketEvents.contraOfertaCreada, _onNuevaOferta);
     SocketService.instance.leaveRoom(SocketRooms.solicitud(widget.solicitudId));
     super.dispose();
   }

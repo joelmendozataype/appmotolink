@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:mobile/core/di/service_locator.dart';
+import 'package:mobile/core/push/push_service.dart';
 import 'package:mobile/core/storage/sesion_storage.dart';
 import 'package:mobile/features/auth/domain/entities/usuario_entity.dart';
 import 'package:mobile/features/profile/domain/entities/mototaxista_entity.dart';
@@ -77,6 +80,10 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> cerrarSesion() async {
+    // Antes de soltar la sesión: la baja del dispositivo necesita estar
+    // autenticada, y sin ella el teléfono seguiría recibiendo avisos de
+    // esta cuenta.
+    await PushService.instance.darDeBaja();
     try {
       await ServiceLocator.logoutUsuario();
     } catch (_) {
@@ -88,6 +95,9 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _recordar(Usuario usuario, {bool persistir = true}) async {
     _usuarioActual = usuario;
+    // El token se asocia al usuario que acaba de entrar: hasta ahora no
+    // se sabía a quién pertenecía el teléfono.
+    unawaited(PushService.instance.registrarDispositivo());
     final cookie = ServiceLocator.apiClient.sessionCookie;
     if (persistir && cookie != null) {
       await _storage.guardar(cookie: cookie, usuario: usuario);

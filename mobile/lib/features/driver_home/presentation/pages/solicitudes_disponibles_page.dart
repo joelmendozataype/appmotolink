@@ -33,7 +33,7 @@ class _SolicitudesDisponiblesPageState
 
   @override
   void dispose() {
-    SocketService.instance.off(SocketEvents.solicitudCreada);
+    SocketService.instance.off(SocketEvents.solicitudCreada, _onSolicitudCreada);
     SocketService.instance.leaveRoom(SocketRooms.conductores);
     super.dispose();
   }

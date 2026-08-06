@@ -35,8 +35,8 @@ class _InicioMototaxistaPageState extends State<InicioMototaxistaPage> {
 
   @override
   void dispose() {
-    SocketService.instance.off(SocketEvents.viajeAsignado);
-    SocketService.instance.off(SocketEvents.solicitudCreada);
+    SocketService.instance.off(SocketEvents.viajeAsignado, _onViajeAsignado);
+    SocketService.instance.off(SocketEvents.solicitudCreada, _onSolicitudCreada);
     final conductorId = context.read<AuthProvider>().usuarioActual?.id;
     if (conductorId != null) {
       SocketService.instance.leaveRoom(SocketRooms.usuario(conductorId));

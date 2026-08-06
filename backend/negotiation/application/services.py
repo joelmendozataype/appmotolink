@@ -1,4 +1,3 @@
-from core.realtime.notifier import SocketIORealtimeNotifier
 from negotiation.application.usecases import (
     ConductorAceptarSolicitudUseCase,
     ConductorContraofertarUseCase,
@@ -18,7 +17,7 @@ class NegotiationService:
         self.oferta_repo = oferta_repo or di.oferta_repo()
         self.solicitud_repo = solicitud_repo or di.solicitud_repo()
         self.viaje_repo = viaje_repo or di.viaje_repo()
-        self.notifier = notifier or SocketIORealtimeNotifier()
+        self.notifier = notifier or di.notifier()
 
     def aceptar(self, *, solicitud_id, conductor):
         usecase = ConductorAceptarSolicitudUseCase(

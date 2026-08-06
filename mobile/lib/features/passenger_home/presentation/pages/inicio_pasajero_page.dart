@@ -31,8 +31,8 @@ class _InicioPasajeroPageState extends State<InicioPasajeroPage> {
 
   @override
   void dispose() {
-    SocketService.instance.off(SocketEvents.ofertaCreada);
-    SocketService.instance.off(SocketEvents.contraOfertaCreada);
+    SocketService.instance.off(SocketEvents.ofertaCreada, _onOferta);
+    SocketService.instance.off(SocketEvents.contraOfertaCreada, _onOferta);
     final pasajeroId = context.read<AuthProvider>().usuarioActual?.id;
     if (pasajeroId != null) {
       SocketService.instance.leaveRoom(SocketRooms.usuario(pasajeroId));

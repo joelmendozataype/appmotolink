@@ -115,4 +115,15 @@ class ApiClient {
 
   Future<dynamic> delete(String path) =>
       _enviar(() => _client.delete(_uri(path), headers: _headers));
+
+  /// DELETE con cuerpo. Lo necesita la baja de dispositivos, que envía el
+  /// token a borrar; el resto de bajas identifican el recurso por la URL.
+  Future<dynamic> deleteConCuerpo(String path, Map<String, dynamic> body) =>
+      _enviar(
+        () => _client.delete(
+          _uri(path),
+          headers: _headers,
+          body: jsonEncode(body),
+        ),
+      );
 }

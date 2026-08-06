@@ -26,4 +26,5 @@ class ApiConstants {
   static const String viajes = '/viajes';
   static const String historial = '/historial';
   static const String calificaciones = '/calificaciones';
+  static const String dispositivos = '/dispositivos';
 }

@@ -190,6 +190,11 @@ DATABASES = {
 MOTOLINK_DB_BACKEND = os.environ.get('MOTOLINK_DB_BACKEND', 'firestore')
 os.environ.setdefault('MOTOLINK_DB_BACKEND', MOTOLINK_DB_BACKEND)
 
+# Notificaciones push (Firebase Cloud Messaging). Se desactivan con
+# MOTOLINK_PUSH=off para desarrollar sin gastar cuota ni depender de la
+# red; los tests las apagan explícitamente.
+MOTOLINK_PUSH = os.environ.get('MOTOLINK_PUSH', 'on').lower() != 'off'
+
 # Credencial del Admin SDK. Es un secreto real: nunca se versiona.
 # Descargarla en la consola de Firebase > Configuración del proyecto >
 # Cuentas de servicio > Generar nueva clave privada.

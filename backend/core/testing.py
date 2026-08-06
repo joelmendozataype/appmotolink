@@ -30,6 +30,9 @@ from users.domain.entities import Mototaxista, RolUsuario, Usuario
     # nada: el algoritmo real se sigue usando fuera de los tests, y
     # check_password lo deduce del prefijo del hash de todos modos.
     PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'],
+    # Ningún test debe salir a Firebase Cloud Messaging. Los que prueban
+    # las push usan un emisor falso y lo activan por su cuenta.
+    MOTOLINK_PUSH=False,
 )
 class FirestoreTestCase(SimpleTestCase):
     def setUp(self):
