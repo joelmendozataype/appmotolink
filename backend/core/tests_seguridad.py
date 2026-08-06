@@ -61,6 +61,18 @@ class SinSesionTests(FirestoreTestCase):
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(respuesta.data['estado'], 'ok')
 
+    def test_la_portada_responde_sin_sesion(self):
+        """Abrir el dominio a secas devolvia un 404 que parecia averia."""
+        respuesta = self.anonimo.get('/')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.data['servicio'], 'MotoLink API')
+
+    def test_la_portada_no_filtra_datos(self):
+        respuesta = self.anonimo.get('/')
+        cuerpo = str(respuesta.data).lower()
+        for filtracion in ('@motolink.com', 'pbkdf2', 'private_key'):
+            self.assertNotIn(filtracion, cuerpo)
+
     def test_la_ruta_de_salud_no_filtra_datos(self):
         """Ser pública no la convierte en una puerta trasera."""
         respuesta = self.anonimo.get('/api/salud/')
