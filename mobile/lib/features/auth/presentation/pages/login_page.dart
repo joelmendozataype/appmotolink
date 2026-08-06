@@ -4,6 +4,7 @@ import 'package:mobile/core/enums/rol_usuario.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/shared/widgets/cabecera_curva.dart';
 import 'package:mobile/shared/widgets/campo_contrasena.dart';
 import 'package:provider/provider.dart';
 
@@ -21,6 +22,17 @@ class _LoginPageState extends State<LoginPage> {
   final _correoController = TextEditingController();
   final _contrasenaController = TextEditingController();
   bool _cargando = false;
+
+  /// Si se desmarca, la sesión dura solo hasta cerrar la app: no se
+  /// guarda en el dispositivo. Útil en un teléfono prestado o compartido.
+  bool _recordarme = true;
+
+  @override
+  void dispose() {
+    _correoController.dispose();
+    _contrasenaController.dispose();
+    super.dispose();
+  }
 
   String get _tituloRol {
     switch (widget.rol) {
@@ -40,6 +52,7 @@ class _LoginPageState extends State<LoginPage> {
       final usuario = await context.read<AuthProvider>().login(
         _correoController.text.trim(),
         _contrasenaController.text,
+        recordar: _recordarme,
       );
 
       String destino;
@@ -86,61 +99,264 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colores = Theme.of(context).colorScheme;
     final mostrarRegistro = widget.rol != RolUsuario.administrador;
+
     return Scaffold(
-      appBar: AppBar(title: Text('Iniciar sesión · $_tituloRol')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextFormField(
-                    controller: _correoController,
-                    decoration: const InputDecoration(labelText: 'Correo'),
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) =>
-                        (v == null || v.isEmpty) ? 'Ingresa tu correo' : null,
+      backgroundColor: colores.surface,
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _cabecera(context),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _tarjetaFormulario(context),
+                      if (mostrarRegistro) ...[
+                        const SizedBox(height: 20),
+                        _enlaceRegistro(context),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  CampoContrasena(
-                    controller: _contrasenaController,
-                    validator: (v) => (v == null || v.isEmpty)
-                        ? 'Ingresa tu contraseña'
-                        : null,
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _cargando ? null : _ingresar,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: _cargando
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Ingresar'),
-                    ),
-                  ),
-                  if (mostrarRegistro) ...[
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: _irARegistro,
-                      child: const Text('¿No tienes cuenta? Regístrate'),
-                    ),
-                  ],
-                ],
+                ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _cabecera(BuildContext context) {
+    final textos = Theme.of(context).textTheme;
+    return Stack(
+      children: [
+        CabeceraCurva(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 40),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.electric_moped,
+                      size: 40, color: Colors.white),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '¡Bienvenido!',
+                  style: textos.headlineMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Ingresa como $_tituloRol',
+                  style: textos.bodyMedium
+                      ?.copyWith(color: Colors.white.withValues(alpha: 0.9)),
+                ),
+              ],
             ),
           ),
         ),
+        // Vuelta atrás sobre la cabecera, ya que no hay AppBar.
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 4,
+          left: 4,
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            tooltip: 'Volver',
+            onPressed: () => context.canPop()
+                ? context.pop()
+                : context.go(AppRoutes.roleSelection),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _tarjetaFormulario(BuildContext context) {
+    final colores = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colores.primary,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 6)),
+        ],
       ),
+      // Los campos van sobre fondo oscuro: se sobreescribe el tema local
+      // en vez de repetir la decoración campo por campo.
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.white,
+            prefixIconColor: colores.primary,
+            suffixIconColor: colores.primary,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.white, width: 2),
+            ),
+            labelStyle: const TextStyle(color: Colors.black54),
+          ),
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _etiqueta('Correo electrónico'),
+              TextFormField(
+                controller: _correoController,
+                keyboardType: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.username],
+                decoration: const InputDecoration(
+                  hintText: 'tucorreo@ejemplo.com',
+                  prefixIcon: Icon(Icons.mail_outline),
+                ),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Ingresa tu correo' : null,
+              ),
+              const SizedBox(height: 16),
+              _etiqueta('Contraseña'),
+              CampoContrasena(
+                controller: _contrasenaController,
+                etiqueta: '',
+                pista: '••••••••',
+                iconoInicial: Icons.lock_outline,
+                validator: (v) => (v == null || v.isEmpty)
+                    ? 'Ingresa tu contraseña'
+                    : null,
+              ),
+              const SizedBox(height: 4),
+              _recordarmeFila(context),
+              const SizedBox(height: 12),
+              _botonIngresar(context),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _etiqueta(String texto) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6, left: 4),
+      child: Text(
+        texto,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _recordarmeFila(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: Checkbox(
+            value: _recordarme,
+            onChanged: (v) => setState(() => _recordarme = v ?? true),
+            side: const BorderSide(color: Colors.white70, width: 1.5),
+            checkColor: Theme.of(context).colorScheme.primary,
+            fillColor: WidgetStateProperty.resolveWith(
+              (estados) => estados.contains(WidgetState.selected)
+                  ? Colors.white
+                  : Colors.transparent,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Toda la fila alterna la casilla: un cuadro de 24 px es un blanco
+        // difícil de acertar con el pulgar.
+        Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => _recordarme = !_recordarme),
+            child: const Text(
+              'Mantener sesión iniciada',
+              style: TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _botonIngresar(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: Theme.of(context).colorScheme.primary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(26),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        onPressed: _cargando ? null : _ingresar,
+        child: _cargando
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('Ingresar'),
+      ),
+    );
+  }
+
+  Widget _enlaceRegistro(BuildContext context) {
+    final colores = Theme.of(context).colorScheme;
+    // Wrap y no Row: con el texto a un lado y el botón al otro, en
+    // pantallas estrechas la fila se desbordaba y salía la franja de
+    // aviso. Así pasa a la línea siguiente en vez de recortarse.
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(
+          '¿No tienes cuenta?',
+          style: TextStyle(color: colores.onSurfaceVariant),
+        ),
+        TextButton(
+          onPressed: _irARegistro,
+          child: const Text(
+            'Regístrate',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -23,9 +23,16 @@ class AuthProvider extends ChangeNotifier {
   Usuario? get usuarioActual => _usuarioActual;
   bool get autenticado => _usuarioActual != null;
 
-  Future<Usuario> login(String correo, String contrasena) async {
+  /// [recordar] a false deja la sesión solo en memoria: se pierde al
+  /// cerrar la app. Es lo que se espera en un teléfono prestado o
+  /// compartido, y lo controla la casilla de la pantalla de login.
+  Future<Usuario> login(
+    String correo,
+    String contrasena, {
+    bool recordar = true,
+  }) async {
     final usuario = await ServiceLocator.loginUsuario(correo, contrasena);
-    await _recordar(usuario);
+    await _recordar(usuario, persistir: recordar);
     return usuario;
   }
 
@@ -79,11 +86,15 @@ class AuthProvider extends ChangeNotifier {
     await _olvidar();
   }
 
-  Future<void> _recordar(Usuario usuario) async {
+  Future<void> _recordar(Usuario usuario, {bool persistir = true}) async {
     _usuarioActual = usuario;
     final cookie = ServiceLocator.apiClient.sessionCookie;
-    if (cookie != null) {
+    if (persistir && cookie != null) {
       await _storage.guardar(cookie: cookie, usuario: usuario);
+    } else if (!persistir) {
+      // Por si quedaba una sesión guardada de un login anterior: quien
+      // desmarca la casilla espera que no quede rastro en el aparato.
+      await _storage.limpiar();
     }
     notifyListeners();
   }

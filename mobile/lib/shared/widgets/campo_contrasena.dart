@@ -20,6 +20,12 @@ class CampoContrasena extends StatefulWidget {
   /// claves; en el login, una ya guardada.
   final bool esRegistro;
 
+  /// Icono a la izquierda. Opcional: solo lo usan las pantallas de acceso.
+  final IconData? iconoInicial;
+
+  /// Texto de marca de agua dentro del campo.
+  final String? pista;
+
   const CampoContrasena({
     super.key,
     required this.controller,
@@ -27,6 +33,8 @@ class CampoContrasena extends StatefulWidget {
     this.validator,
     this.ayuda,
     this.esRegistro = false,
+    this.iconoInicial,
+    this.pista,
   });
 
   @override
@@ -46,6 +54,9 @@ class _CampoContrasenaState extends State<CampoContrasena> {
       ],
       decoration: InputDecoration(
         labelText: widget.etiqueta,
+        hintText: widget.pista,
+        prefixIcon:
+            widget.iconoInicial == null ? null : Icon(widget.iconoInicial),
         helperText: widget.ayuda,
         helperMaxLines: 2,
         suffixIcon: IconButton(
