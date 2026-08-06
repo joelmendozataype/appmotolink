@@ -6,6 +6,8 @@ backend/.venv/
 backend/db.sqlite3
 backend/*.log
 backend/.env
+# Generado por collectstatic en cada despliegue.
+backend/staticfiles/
 
 # Credenciales de Firebase (Admin SDK). Son secretos reales: la clave
 # privada de la cuenta de servicio da acceso total a Firestore.

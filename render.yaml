@@ -1,0 +1,67 @@
+# Plano de despliegue para Render (https://render.com).
+#
+# Con este archivo en la raíz, Render configura el servicio solo: en su
+# panel basta con "New > Blueprint" y elegir este repositorio.
+#
+# Las variables marcadas con sync:false NO se guardan aquí: son secretos
+# y se pegan a mano en el panel de Render. Ver docs/DESPLIEGUE.md.
+
+services:
+  - type: web
+    name: motolink-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    region: oregon
+
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput"
+
+    # Un solo proceso con varios hilos, y esto no es negociable:
+    #
+    # --workers 1  : python-socketio guarda en memoria qué cliente está en
+    #                qué sala. Con varios procesos, un evento emitido por
+    #                uno no llega a los clientes conectados a otro y el
+    #                tiempo real falla de forma intermitente. Escalar a
+    #                más procesos exigiría Redis como bus de mensajes.
+    #
+    # gthread      : ni gevent ni eventlet. El SDK de Firestore habla
+    #                gRPC, cuyo núcleo en C no sobrevive al monkey
+    #                patching: el servidor acepta la conexión y no
+    #                responde nunca, sin error ni log.
+    startCommand: "gunicorn backend.wsgi:application --worker-class gthread --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT"
+
+    healthCheckPath: /api/solicitudes-viaje/
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.10"
+
+      # Django la genera sola en el primer despliegue. Si se cambia,
+      # todas las sesiones abiertas se invalidan (van firmadas en cookie).
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+
+      - key: DJANGO_DEBUG
+        value: "False"
+
+      # Render expone el dominio en RENDER_EXTERNAL_HOSTNAME y settings.py
+      # lo agrega solo a ALLOWED_HOSTS, así que aquí solo van los locales.
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "127.0.0.1,localhost"
+
+      # Orígenes web autorizados. La app Android no manda cabecera Origin,
+      # así que esto solo importa si además sirves la versión web.
+      # Ajustar al dominio real una vez creado el servicio.
+      - key: DJANGO_CORS_ORIGINS
+        sync: false
+
+      - key: MOTOLINK_DB_BACKEND
+        value: firestore
+
+      - key: FIREBASE_PROJECT_ID
+        value: motolink-cff52
+
+      # SECRETO: el contenido completo del JSON de la cuenta de servicio,
+      # pegado tal cual. No se versiona nunca.
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false

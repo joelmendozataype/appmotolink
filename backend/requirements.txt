@@ -12,3 +12,9 @@ firebase-admin==7.1.0
 # simple-websocket el upgrade real de WebSocket.
 Werkzeug==3.1.8
 simple-websocket==1.1.0
+
+# Despliegue. gunicorn es el servidor de producción (en Linux; en Windows
+# se sigue usando run_realtime.py) y whitenoise sirve los estáticos sin
+# necesitar nginx delante.
+gunicorn==26.0.0
+whitenoise==6.12.0

@@ -48,9 +48,18 @@ if not SECRET_KEY:
         )
     SECRET_KEY = 'django-insecure-solo-para-desarrollo-local-no-usar-en-produccion'
 
-ALLOWED_HOSTS = os.environ.get(
-    'DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost,10.0.2.2',
-).split(',')
+ALLOWED_HOSTS = [
+    h.strip() for h in os.environ.get(
+        'DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost,10.0.2.2',
+    ).split(',') if h.strip()
+]
+
+# Render publica el dominio asignado en esta variable. Se añade solo para
+# no tener que copiarlo a mano tras el primer despliegue (y porque el
+# dominio no se conoce hasta que el servicio existe).
+_dominio_render = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if _dominio_render and _dominio_render not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_dominio_render)
 
 
 # Application definition
@@ -120,6 +129,9 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise sirve los estáticos en producción sin necesitar nginx.
+    # Sin él, la interfaz navegable de DRF sale sin estilos al desplegar.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -243,6 +255,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# Destino de `collectstatic`, que se ejecuta en cada despliegue.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

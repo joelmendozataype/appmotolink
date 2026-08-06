@@ -3,6 +3,7 @@
 Este es el único archivo del proyecto que importa el SDK de Firebase.
 Si mañana se cambia de proveedor, se reemplaza solo este archivo.
 """
+import json
 import os
 import threading
 
@@ -17,9 +18,13 @@ def _inicializar_app():
 
     La credencial se resuelve en este orden:
 
-    1. FIREBASE_CREDENTIALS_FILE: ruta al JSON de cuenta de servicio.
-    2. GOOGLE_APPLICATION_CREDENTIALS: la variable estándar de Google.
-    3. Credenciales por defecto del entorno (Cloud Run, GCE, gcloud auth).
+    1. FIREBASE_CREDENTIALS_JSON: el contenido del JSON, no una ruta. Es
+       la vía para plataformas como Render, Railway o Fly, donde no hay
+       disco donde dejar un archivo y los secretos se pasan por variable
+       de entorno.
+    2. FIREBASE_CREDENTIALS_FILE: ruta al JSON. Cómodo en local.
+    3. GOOGLE_APPLICATION_CREDENTIALS: la variable estándar de Google.
+    4. Credenciales por defecto del entorno (Cloud Run, GCE, gcloud auth).
 
     Nunca se lee la credencial desde el repositorio: es un secreto real
     (a diferencia de google-services.json, que es config de cliente).
@@ -30,10 +35,24 @@ def _inicializar_app():
     if firebase_admin._apps:
         return firebase_admin.get_app()
 
-    ruta = os.environ.get('FIREBASE_CREDENTIALS_FILE')
     project_id = os.environ.get('FIREBASE_PROJECT_ID')
     opciones = {'projectId': project_id} if project_id else None
 
+    contenido = os.environ.get('FIREBASE_CREDENTIALS_JSON', '').strip()
+    if contenido:
+        try:
+            datos = json.loads(contenido)
+        except json.JSONDecodeError as error:
+            raise RuntimeError(
+                'FIREBASE_CREDENTIALS_JSON no contiene un JSON válido. Pega el '
+                'contenido completo del archivo de la cuenta de servicio, tal '
+                f'cual, con sus llaves exteriores incluidas. Detalle: {error}',
+            ) from error
+        return firebase_admin.initialize_app(
+            credentials.Certificate(datos), opciones,
+        )
+
+    ruta = os.environ.get('FIREBASE_CREDENTIALS_FILE')
     if ruta:
         if not os.path.exists(ruta):
             raise RuntimeError(
