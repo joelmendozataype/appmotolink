@@ -8,6 +8,8 @@ class SolicitudViajeModel extends SolicitudViaje {
     required super.destino,
     required super.tarifaPropuesta,
     required super.estado,
+    super.creadoEn,
+    super.yaRespondida,
   });
 
   factory SolicitudViajeModel.fromJson(Map<String, dynamic> json) {
@@ -17,6 +19,12 @@ class SolicitudViajeModel extends SolicitudViaje {
       destino: json['destino'] as String,
       tarifaPropuesta: (json['tarifa_propuesta'] as num).toDouble(),
       estado: EstadoSolicitud.values.byName(json['estado'] as String),
+      // Puede faltar: las solicitudes migradas no tienen fecha, y
+      // ya_respondida solo lo envía el backend a los mototaxistas.
+      creadoEn: json['creado_en'] == null
+          ? null
+          : DateTime.tryParse(json['creado_en'] as String)?.toLocal(),
+      yaRespondida: json['ya_respondida'] as bool?,
     );
   }
 

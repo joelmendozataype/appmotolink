@@ -35,6 +35,7 @@ from trips.domain.repositories import (
     ViajeNoEncontradoError,
 )
 from trips.infrastructure.serializers import SolicitudViajeSerializer, ViajeSerializer
+from users.domain.entities import RolUsuario
 from users.domain.repositories import MototaxistaNoEncontradoError
 
 ESTADOS_VIAJE_ACTIVO = [EstadoViaje.ASIGNADO, EstadoViaje.EN_CURSO]
@@ -70,7 +71,21 @@ class SolicitudViajeViewSet(ViewSet):
 
     def list(self, request):
         solicitudes = ListarSolicitudesDisponiblesUseCase(di.solicitud_repo()).execute()
-        return Response(SolicitudViajeSerializer(solicitudes, many=True).data)
+
+        # Al mototaxista se le marca cuáles ya respondió, para que la app
+        # no le ofrezca ofertar en algo que le devolverá un 409. Es una
+        # sola lectura por lote, no una consulta por solicitud.
+        respondidas = None
+        if getattr(request.user, 'rol', None) == RolUsuario.MOTOTAXISTA:
+            respondidas = di.oferta_repo().solicitudes_ya_respondidas(
+                [s.id for s in solicitudes], request.user.id,
+            )
+
+        return Response(
+            SolicitudViajeSerializer(
+                solicitudes, many=True, context={'respondidas': respondidas},
+            ).data,
+        )
 
     def retrieve(self, request, pk=None):
         try:

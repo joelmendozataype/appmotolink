@@ -27,6 +27,10 @@ class OfertaRepository(ABC):
         ...
 
     @abstractmethod
+    def solicitudes_ya_respondidas(self, solicitud_ids, conductor_id):
+        """De esas solicitudes, cuáles ya respondió el conductor."""
+
+    @abstractmethod
     def guardar(self, oferta):
         ...
 

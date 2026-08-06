@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
+import 'package:mobile/core/utils/formato_fecha.dart';
+import 'package:mobile/core/enums/estado_solicitud.dart';
 import 'package:mobile/core/realtime/socket_events.dart';
 import 'package:mobile/core/realtime/socket_service.dart';
 import 'package:mobile/core/error/exceptions.dart';
@@ -73,6 +75,32 @@ class _SolicitudesDisponiblesPageState
     context.push(AppRoutes.contraofertaPath(solicitud.id));
   }
 
+  /// El color y el texto dependen de si este conductor ya respondió.
+  ///
+  /// Antes todas se veían iguales: pulsaba "Ofertar" en una que ya había
+  /// respondido y recibía un 409 sin haber podido saberlo antes.
+  Widget _botonOfertar(SolicitudViaje solicitud, bool respondida) {
+    if (respondida) {
+      return OutlinedButton.icon(
+        icon: const Icon(Icons.check, size: 16),
+        label: const Text('Ofertado'),
+        style: OutlinedButton.styleFrom(foregroundColor: Colors.grey),
+        // Sigue pulsable para poder ver el detalle, pero no invita a
+        // ofertar de nuevo.
+        onPressed: () => _verSolicitud(solicitud),
+      );
+    }
+    final enNegociacion = solicitud.estado == EstadoSolicitud.enNegociacion;
+    return FilledButton(
+      style: enNegociacion
+          // Ámbar: sigue abierta, pero ya hay otros compitiendo.
+          ? FilledButton.styleFrom(backgroundColor: Colors.amber.shade800)
+          : null,
+      onPressed: () => _verSolicitud(solicitud),
+      child: const Text('Ofertar'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,22 +125,68 @@ class _SolicitudesDisponiblesPageState
           itemCount: disponibles.length,
           itemBuilder: (context, index) {
             final solicitud = disponibles[index];
+            final respondida = solicitud.yaRespondida ?? false;
+            final enNegociacion =
+                solicitud.estado == EstadoSolicitud.enNegociacion;
+
             return Card(
               child: ListTile(
                 contentPadding: const EdgeInsets.all(16),
-                leading: const Icon(Icons.location_on),
+                leading: Icon(
+                  Icons.location_on,
+                  color: respondida ? Colors.grey : null,
+                ),
                 title: Text('${solicitud.origen} → ${solicitud.destino}'),
-                subtitle: Text(
-                  'Tarifa propuesta: S/ ${solicitud.tarifaPropuesta.toStringAsFixed(2)}',
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Tarifa propuesta: S/ ${solicitud.tarifaPropuesta.toStringAsFixed(2)}',
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.schedule, size: 13),
+                        const SizedBox(width: 4),
+                        Text(
+                          FormatoFecha.legible(solicitud.creadoEn),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        if (enNegociacion) ...[
+                          const SizedBox(width: 8),
+                          const _Etiqueta('En negociación'),
+                        ],
+                      ],
+                    ),
+                  ],
                 ),
-                trailing: FilledButton(
-                  onPressed: () => _verSolicitud(solicitud),
-                  child: const Text('Ofertar'),
-                ),
+                trailing: _botonOfertar(solicitud, respondida),
               ),
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// Distintivo pequeño para el estado de la solicitud.
+class _Etiqueta extends StatelessWidget {
+  final String texto;
+
+  const _Etiqueta(this.texto);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade100,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        texto,
+        style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
       ),
     );
   }

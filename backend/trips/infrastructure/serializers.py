@@ -23,6 +23,16 @@ class SolicitudViajeSerializer(serializers.Serializer):
         choices=EstadoSolicitud.valores(), read_only=True,
     )
     creado_en = serializers.DateTimeField(read_only=True)
+    # Solo tiene sentido para un mototaxista mirando el listado: le dice
+    # si esa solicitud ya la respondió. Sin esto, todas se veían iguales y
+    # al pulsar recibía un 409 "Ya respondiste a esta solicitud".
+    ya_respondida = serializers.SerializerMethodField()
+
+    def get_ya_respondida(self, solicitud):
+        respondidas = self.context.get('respondidas')
+        if respondidas is None:
+            return None
+        return str(solicitud.id) in respondidas
 
 
 class ViajeSerializer(serializers.Serializer):

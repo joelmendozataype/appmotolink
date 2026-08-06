@@ -133,6 +133,24 @@ class FirestoreOfertaRepository(OfertaRepository):
         filtros = [Filtro('estado', '==', str(EstadoOferta.PENDIENTE))]
         return self._hidratar(self.store.query(OFERTAS, filtros))
 
+    def solicitudes_ya_respondidas(self, solicitud_ids, conductor_id):
+        """De esas solicitudes, cuáles ya respondió este conductor.
+
+        Una sola lectura por lote gracias al id determinista de la oferta:
+        se calcula qué documentos existirían y se piden todos de golpe, en
+        vez de una consulta por solicitud.
+        """
+        conductor_id = a_texto_id(conductor_id)
+        if not conductor_id:
+            return set()
+
+        por_documento = {
+            id_documento(a_texto_id(sid), conductor_id): a_texto_id(sid)
+            for sid in solicitud_ids
+        }
+        encontrados = self.store.get_many(OFERTAS, list(por_documento))
+        return {por_documento[doc_id] for doc_id in encontrados}
+
     def buscar_de_conductor(self, solicitud_id, conductor_id):
         # Con el id determinista esto es una lectura directa, no una query.
         doc_id = id_documento(a_texto_id(solicitud_id), a_texto_id(conductor_id))
