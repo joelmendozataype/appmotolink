@@ -267,6 +267,17 @@ class FirestoreViajeRepository(ViajeRepository):
         self.store.set(VIAJES, viaje.id, self._a_documento(viaje))
         return viaje
 
+    def cerrar_si_activo(self, viaje_id, nuevo_estado, momento):
+        """Un viaje solo se cierra una vez: si ya está finalizado o
+        cancelado, la segunda pulsación no hace nada."""
+        return self.store.compare_and_set(
+            VIAJES,
+            a_texto_id(viaje_id),
+            'estado',
+            [str(EstadoViaje.ASIGNADO), str(EstadoViaje.EN_CURSO)],
+            {'estado': str(nuevo_estado), 'finalizado_en': momento},
+        )
+
     def eliminar(self, viaje_id):
         viaje_id = a_texto_id(viaje_id)
         if self.store.get(VIAJES, viaje_id) is None:

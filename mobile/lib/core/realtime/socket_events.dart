@@ -6,6 +6,8 @@ class SocketEvents {
   static const contraOfertaCreada = 'ContraOfertaCreada';
   static const ofertaAceptada = 'OfertaAceptada';
   static const viajeAsignado = 'ViajeAsignado';
+  static const solicitudCancelada = 'SolicitudCancelada';
+  static const viajeCancelado = 'ViajeCancelado';
 }
 
 class SocketRooms {

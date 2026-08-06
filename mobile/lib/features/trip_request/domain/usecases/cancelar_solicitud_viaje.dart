@@ -1,3 +1,4 @@
+import 'package:mobile/features/trip_request/domain/entities/solicitud_viaje_entity.dart';
 import 'package:mobile/features/trip_request/domain/repositories/solicitud_viaje_repository.dart';
 
 class CancelarSolicitudViaje {
@@ -5,7 +6,7 @@ class CancelarSolicitudViaje {
 
   CancelarSolicitudViaje(this.repository);
 
-  Future<void> call(String id) {
+  Future<SolicitudViaje> call(String id) {
     return repository.cancelarSolicitud(id);
   }
 }

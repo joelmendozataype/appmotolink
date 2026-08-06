@@ -20,6 +20,7 @@ class OfertasRecibidasPage extends StatefulWidget {
 class _OfertasRecibidasPageState extends State<OfertasRecibidasPage> {
   List<Oferta> _ofertas = [];
   bool _cargando = true;
+  bool _cancelando = false;
   String? _error;
 
   @override
@@ -81,6 +82,48 @@ class _OfertasRecibidasPageState extends State<OfertasRecibidasPage> {
     context.push(AppRoutes.conductorSeleccionado, extra: oferta);
   }
 
+  /// El pasajero se echa atrás mientras espera ofertas. Solo funciona
+  /// antes de elegir conductor: una vez hay viaje, lo que se cancela es
+  /// el viaje, y el backend responde 409 si se intenta aquí.
+  Future<void> _cancelarSolicitud() async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogo) => AlertDialog(
+        title: const Text('¿Cancelar la solicitud?'),
+        content: const Text(
+          'Dejarás de recibir ofertas de los mototaxistas.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogo, false),
+            child: const Text('No, seguir esperando'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogo, true),
+            child: const Text('Sí, cancelar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
+
+    setState(() => _cancelando = true);
+    try {
+      await ServiceLocator.cancelarSolicitudViaje(widget.solicitudId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Solicitud cancelada')),
+      );
+      context.go(AppRoutes.inicioPasajero);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
+    } finally {
+      if (mounted) setState(() => _cancelando = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,6 +133,11 @@ class _OfertasRecibidasPageState extends State<OfertasRecibidasPage> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _cargarOfertas,
+          ),
+          IconButton(
+            icon: const Icon(Icons.cancel_outlined),
+            tooltip: 'Cancelar solicitud',
+            onPressed: _cancelando ? null : _cancelarSolicitud,
           ),
         ],
       ),

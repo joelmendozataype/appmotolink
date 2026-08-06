@@ -27,10 +27,12 @@ import 'package:mobile/features/trip_history/data/repositories/historial_reposit
 import 'package:mobile/features/trip_history/domain/usecases/obtener_historial.dart';
 import 'package:mobile/features/trip_request/data/datasources/solicitud_viaje_remote_datasource.dart';
 import 'package:mobile/features/trip_request/data/repositories/solicitud_viaje_repository_impl.dart';
+import 'package:mobile/features/trip_request/domain/usecases/cancelar_solicitud_viaje.dart';
 import 'package:mobile/features/trip_request/domain/usecases/crear_solicitud_viaje.dart';
 import 'package:mobile/features/trip_request/domain/usecases/obtener_solicitudes_disponibles.dart';
 import 'package:mobile/features/trip_tracking/data/datasources/viaje_remote_datasource.dart';
 import 'package:mobile/features/trip_tracking/data/repositories/viaje_repository_impl.dart';
+import 'package:mobile/features/trip_tracking/domain/usecases/cancelar_viaje.dart';
 import 'package:mobile/features/trip_tracking/domain/usecases/finalizar_viaje.dart';
 import 'package:mobile/features/trip_tracking/domain/usecases/listar_viajes.dart';
 import 'package:mobile/features/trip_tracking/domain/usecases/obtener_viaje_activo.dart';
@@ -68,6 +70,7 @@ class ServiceLocator {
   static final _solicitudDs = SolicitudViajeRemoteDataSourceImpl(apiClient);
   static final _solicitudRepo = SolicitudViajeRepositoryImpl(_solicitudDs);
   static final crearSolicitudViaje = CrearSolicitudViaje(_solicitudRepo);
+  static final cancelarSolicitudViaje = CancelarSolicitudViaje(_solicitudRepo);
   static final obtenerSolicitudesDisponibles =
       ObtenerSolicitudesDisponibles(_solicitudRepo);
 
@@ -86,6 +89,7 @@ class ServiceLocator {
   static final obtenerViajeActivo = ObtenerViajeActivo(_viajeRepo);
   static final obtenerViajePorId = ObtenerViajePorId(_viajeRepo);
   static final finalizarViaje = FinalizarViaje(_viajeRepo);
+  static final cancelarViaje = CancelarViaje(_viajeRepo);
   static final listarViajes = ListarViajes(_viajeRepo);
 
   // ---- Trip history (Historial) ----

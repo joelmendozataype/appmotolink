@@ -28,6 +28,14 @@ class RealtimeNotifier(ABC):
     def notificar_viaje_asignado(self, viaje):
         ...
 
+    @abstractmethod
+    def notificar_solicitud_cancelada(self, solicitud):
+        ...
+
+    @abstractmethod
+    def notificar_viaje_cancelado(self, viaje):
+        ...
+
 
 def _payload_solicitud(solicitud):
     return {
@@ -110,4 +118,30 @@ class SocketIORealtimeNotifier(RealtimeNotifier):
         )
         sio.emit(
             RealtimeEvents.VIAJE_ASIGNADO, payload, room=room_usuario(viaje.conductor_id),
+        )
+
+    def notificar_solicitud_cancelada(self, solicitud):
+        # Al canal de conductores, para que desaparezca de la lista de
+        # disponibles sin recargar, y al de la solicitud, donde puede
+        # haber conductores mirando las ofertas que enviaron.
+        payload = _payload_solicitud(solicitud)
+        sio.emit(
+            RealtimeEvents.SOLICITUD_CANCELADA, payload, room=room_conductores(),
+        )
+        sio.emit(
+            RealtimeEvents.SOLICITUD_CANCELADA, payload,
+            room=room_solicitud(solicitud.id),
+        )
+
+    def notificar_viaje_cancelado(self, viaje):
+        # A las dos partes: quien cancela ya lo sabe, pero la otra tiene
+        # que enterarse aunque esté en otra pantalla.
+        payload = _payload_viaje(viaje)
+        sio.emit(
+            RealtimeEvents.VIAJE_CANCELADO, payload,
+            room=room_usuario(viaje.pasajero_id),
+        )
+        sio.emit(
+            RealtimeEvents.VIAJE_CANCELADO, payload,
+            room=room_usuario(viaje.conductor_id),
         )

@@ -29,6 +29,11 @@ class ViajeRepositoryImpl implements ViajeRepository {
   }
 
   @override
+  Future<Viaje> cancelarViaje(String viajeId) {
+    return remoteDataSource.cancelarViaje(viajeId);
+  }
+
+  @override
   Future<List<Viaje>> listarTodos() {
     return remoteDataSource.listarTodos();
   }

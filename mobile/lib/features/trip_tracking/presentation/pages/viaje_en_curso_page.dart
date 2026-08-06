@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/location/location_service.dart';
+import 'package:mobile/core/realtime/socket_events.dart';
+import 'package:mobile/core/realtime/socket_service.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/features/trip_tracking/domain/entities/viaje_entity.dart';
 import 'package:mobile/shared/widgets/error_retry_view.dart';
@@ -24,6 +26,7 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
   Viaje? _viaje;
   String? _error;
   bool _finalizando = false;
+  bool _cancelando = false;
 
   Position? _posicionInicial;
   Position? _posicionActual;
@@ -35,10 +38,12 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
     super.initState();
     _cargarViaje();
     _iniciarSeguimientoGps();
+    _escucharCancelacion();
   }
 
   @override
   void dispose() {
+    SocketService.instance.off(SocketEvents.viajeCancelado);
     _suscripcionUbicacion?.cancel();
     super.dispose();
   }
@@ -79,6 +84,59 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
     } on LocationPermissionDeniedException {
       // GPS desactivado o permiso denegado: el viaje continúa sin el
       // panel de seguimiento, no es un error bloqueante.
+    }
+  }
+
+  /// Si la otra parte cancela, hay que sacar al usuario de esta pantalla:
+  /// quedarse en un viaje que ya no existe solo lleva a errores al pulsar
+  /// finalizar.
+  void _escucharCancelacion() {
+    SocketService.instance.on(SocketEvents.viajeCancelado, (data) {
+      if (!mounted) return;
+      if (data is Map && data['id'] != widget.viajeId) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La otra persona canceló el viaje')),
+      );
+      context.go(AppRoutes.inicioPasajero);
+    });
+  }
+
+  Future<void> _cancelarViaje() async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogo) => AlertDialog(
+        title: const Text('¿Cancelar el viaje?'),
+        content: const Text(
+          'Se avisará a la otra persona. Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogo, false),
+            child: const Text('No, continuar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogo, true),
+            child: const Text('Sí, cancelar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
+
+    setState(() => _cancelando = true);
+    try {
+      await ServiceLocator.cancelarViaje(widget.viajeId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Viaje cancelado')),
+      );
+      context.go(AppRoutes.inicioPasajero);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
+    } finally {
+      if (mounted) setState(() => _cancelando = false);
     }
   }
 
@@ -164,7 +222,16 @@ class _ViajeEnCursoPageState extends State<ViajeEnCursoPage> {
                       )
                     : const Text('Finalizar viaje'),
               ),
-              onPressed: _finalizando ? null : _finalizarViaje,
+              onPressed: (_finalizando || _cancelando)
+                  ? null
+                  : _finalizarViaje,
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              icon: const Icon(Icons.close),
+              label: const Text('Cancelar viaje'),
+              style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
+              onPressed: (_finalizando || _cancelando) ? null : _cancelarViaje,
             ),
           ],
         ),

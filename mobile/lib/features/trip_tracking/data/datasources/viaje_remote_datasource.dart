@@ -12,6 +12,8 @@ abstract class ViajeRemoteDataSource {
   Future<ViajeModel> obtenerViajeActivo(String usuarioId);
   Future<ViajeModel> actualizarEstado(String viajeId, EstadoViaje estado);
   Future<ViajeModel> finalizarViaje(String viajeId);
+
+  Future<ViajeModel> cancelarViaje(String viajeId);
   Future<List<ViajeModel>> listarTodos();
 }
 
@@ -50,6 +52,15 @@ class ViajeRemoteDataSourceImpl implements ViajeRemoteDataSource {
   Future<ViajeModel> finalizarViaje(String viajeId) async {
     final json = await client.put(
       '${ApiConstants.viajes}/$viajeId/finalizar',
+      {},
+    );
+    return ViajeModel.fromJson(json as Map<String, dynamic>);
+  }
+
+  @override
+  Future<ViajeModel> cancelarViaje(String viajeId) async {
+    final json = await client.post(
+      '${ApiConstants.viajes}/$viajeId/cancelar',
       {},
     );
     return ViajeModel.fromJson(json as Map<String, dynamic>);

@@ -66,5 +66,14 @@ class ViajeRepository(ABC):
         ...
 
     @abstractmethod
+    def cerrar_si_activo(self, viaje_id, nuevo_estado, momento):
+        """Cierra el viaje solo si sigue activo (asignado o en curso).
+
+        Devuelve True si el cambio se aplicó. Impide que dos pulsaciones
+        simultáneas —o el pasajero y el conductor a la vez— finalicen y
+        cancelen el mismo viaje.
+        """
+
+    @abstractmethod
     def eliminar(self, viaje_id):
         ...

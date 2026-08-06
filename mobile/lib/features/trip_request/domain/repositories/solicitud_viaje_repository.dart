@@ -9,5 +9,5 @@ abstract class SolicitudViajeRepository {
   Future<SolicitudViaje> obtenerSolicitud(String id);
   Future<List<SolicitudViaje>> obtenerSolicitudesDisponibles();
   Future<SolicitudViaje> actualizarEstado(String id, EstadoSolicitud estado);
-  Future<void> cancelarSolicitud(String id);
+  Future<SolicitudViaje> cancelarSolicitud(String id);
 }

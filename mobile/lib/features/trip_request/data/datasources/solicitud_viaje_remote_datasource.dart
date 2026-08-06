@@ -14,7 +14,7 @@ abstract class SolicitudViajeRemoteDataSource {
     String id,
     EstadoSolicitud estado,
   );
-  Future<void> cancelarSolicitud(String id);
+  Future<SolicitudViajeModel> cancelarSolicitud(String id);
 }
 
 class SolicitudViajeRemoteDataSourceImpl
@@ -60,7 +60,14 @@ class SolicitudViajeRemoteDataSourceImpl
   }
 
   @override
-  Future<void> cancelarSolicitud(String id) async {
-    await client.delete('${ApiConstants.solicitudesViaje}/$id');
+  Future<SolicitudViajeModel> cancelarSolicitud(String id) async {
+    // POST /cancelar/ y no DELETE: la solicitud queda en estado
+    // 'cancelada' en vez de desaparecer, para que el conductor que ya
+    // ofertó vea qué pasó y siga contando en el historial.
+    final json = await client.post(
+      '${ApiConstants.solicitudesViaje}/$id/cancelar',
+      {},
+    );
+    return SolicitudViajeModel.fromJson(json as Map<String, dynamic>);
   }
 }

@@ -41,7 +41,7 @@ class SolicitudViajeRepositoryImpl implements SolicitudViajeRepository {
   }
 
   @override
-  Future<void> cancelarSolicitud(String id) {
+  Future<SolicitudViaje> cancelarSolicitud(String id) {
     return remoteDataSource.cancelarSolicitud(id);
   }
 }

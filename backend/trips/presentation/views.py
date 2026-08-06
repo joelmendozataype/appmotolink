@@ -30,7 +30,7 @@ from trips.application.usecases import (
     CrearSolicitudViajeUseCase,
     ListarSolicitudesDisponiblesUseCase,
 )
-from trips.domain.entities import EstadoViaje
+from trips.domain.entities import EstadoSolicitud, EstadoViaje
 from trips.domain.repositories import (
     SolicitudNoEncontradaError,
     ViajeNoEncontradoError,
@@ -39,6 +39,12 @@ from trips.infrastructure.serializers import SolicitudViajeSerializer, ViajeSeri
 from users.domain.repositories import MototaxistaNoEncontradoError
 
 ESTADOS_VIAJE_ACTIVO = [EstadoViaje.ASIGNADO, EstadoViaje.EN_CURSO]
+# Mientras la solicitud sigue abierta a ofertas y el pasajero puede
+# echarse atrás sin que haya un viaje de por medio.
+ESTADOS_SOLICITUD_ABIERTA = [
+    EstadoSolicitud.PENDIENTE,
+    EstadoSolicitud.EN_NEGOCIACION,
+]
 
 
 def _no_encontrado(detalle='No encontrado.'):
@@ -100,13 +106,42 @@ class SolicitudViajeViewSet(ViewSet):
             solicitud = repo.obtener_por_id(pk)
         except SolicitudNoEncontradaError:
             return _no_encontrado()
-        # Solo el pasajero que la creó puede cancelar su solicitud.
+        # Solo el pasajero que la creó puede borrar su solicitud.
         if str(solicitud.pasajero_id) != str(request.user.id) and not es_administrador(
             request.user,
         ):
             return _prohibido()
         repo.eliminar(pk)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'])
+    def cancelar(self, request, pk=None):
+        """El pasajero se echa atrás antes de elegir conductor.
+
+        A diferencia de destroy, no borra: deja la solicitud en estado
+        'cancelada'. Así el conductor que ya había ofertado puede ver qué
+        pasó, y la solicitud sigue contando en el historial.
+        """
+        repo = di.solicitud_repo()
+        try:
+            solicitud = repo.obtener_por_id(pk)
+        except SolicitudNoEncontradaError:
+            return _no_encontrado()
+        if str(solicitud.pasajero_id) != str(request.user.id):
+            return _prohibido('Esta solicitud no es tuya.')
+
+        # Solo mientras siga abierta: una vez aceptada hay un viaje de por
+        # medio, y lo que se cancela entonces es el viaje, no la solicitud.
+        if not repo.cerrar_si_disponible(
+            pk, ESTADOS_SOLICITUD_ABIERTA, EstadoSolicitud.CANCELADA,
+        ):
+            return _conflicto(
+                'La solicitud ya fue aceptada o cancelada.',
+            )
+
+        solicitud.estado = EstadoSolicitud.CANCELADA
+        SocketIORealtimeNotifier().notificar_solicitud_cancelada(solicitud)
+        return Response(SolicitudViajeSerializer(solicitud).data)
 
     def _conductor_de(self, request):
         # El conductor es quien tiene la sesión, no un id del cuerpo.
@@ -195,6 +230,16 @@ class ViajeViewSet(ViewSet):
 
     @action(detail=True, methods=['put'])
     def finalizar(self, request, pk=None):
+        return self._cerrar(request, pk, EstadoViaje.FINALIZADO)
+
+    @action(detail=True, methods=['post'])
+    def cancelar(self, request, pk=None):
+        """Cualquiera de las dos partes puede cancelar un viaje que aún
+        no ha terminado. El estado 'cancelado' existía en el código desde
+        el principio pero nunca se usaba."""
+        return self._cerrar(request, pk, EstadoViaje.CANCELADO)
+
+    def _cerrar(self, request, pk, nuevo_estado):
         repo = di.viaje_repo()
         try:
             viaje = repo.obtener_por_id(pk)
@@ -203,11 +248,18 @@ class ViajeViewSet(ViewSet):
         # Solo el pasajero o el conductor de ESE viaje pueden cerrarlo.
         if not participa_en_viaje(request.user, viaje):
             return _prohibido('No participas en este viaje.')
-        viaje.estado = EstadoViaje.FINALIZADO
-        # Se sella al cerrar, no al consultar: es la marca con la que se
-        # calcula cuánto duró el viaje.
-        viaje.finalizado_en = ahora()
-        repo.guardar(viaje)
+
+        # Cambio condicional en vez de guardar entero: si el otro
+        # participante acaba de cerrarlo, esta petición no debe pisar su
+        # resultado ni volver a sellar la fecha.
+        momento = ahora()
+        if not repo.cerrar_si_activo(pk, nuevo_estado, momento):
+            return _conflicto('Este viaje ya fue cerrado.')
+
+        viaje.estado = nuevo_estado
+        viaje.finalizado_en = momento
+        if nuevo_estado == EstadoViaje.CANCELADO:
+            SocketIORealtimeNotifier().notificar_viaje_cancelado(viaje)
         return Response(ViajeSerializer(viaje).data)
 
 

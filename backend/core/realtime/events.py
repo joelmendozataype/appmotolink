@@ -4,6 +4,8 @@ class RealtimeEvents:
     CONTRAOFERTA_CREADA = 'ContraOfertaCreada'
     OFERTA_ACEPTADA = 'OfertaAceptada'
     VIAJE_ASIGNADO = 'ViajeAsignado'
+    SOLICITUD_CANCELADA = 'SolicitudCancelada'
+    VIAJE_CANCELADO = 'ViajeCancelado'
 
 
 def room_conductores():

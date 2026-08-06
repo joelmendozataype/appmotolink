@@ -6,5 +6,7 @@ abstract class ViajeRepository {
   Future<Viaje> obtenerViajeActivo(String usuarioId);
   Future<Viaje> actualizarEstado(String viajeId, EstadoViaje estado);
   Future<Viaje> finalizarViaje(String viajeId);
+
+  Future<Viaje> cancelarViaje(String viajeId);
   Future<List<Viaje>> listarTodos();
 }
