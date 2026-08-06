@@ -16,14 +16,28 @@ class InicioPasajeroPage extends StatefulWidget {
   State<InicioPasajeroPage> createState() => _InicioPasajeroPageState();
 }
 
-class _InicioPasajeroPageState extends State<InicioPasajeroPage> {
+class _InicioPasajeroPageState extends State<InicioPasajeroPage>
+    with WidgetsBindingObserver {
+  /// Viaje en curso, si lo hay. Alimenta el banner de la parte superior.
+  ///
+  /// Se mantiene al día por tres vías, porque con una sola se quedaba
+  /// obsoleto: seguía anunciando un viaje ya terminado. Ahora se refresca
+  /// al volver de la pantalla del viaje, al llegar el aviso de que se
+  /// cerró, y al volver la app de segundo plano.
   Viaje? _viajeActivo;
 
-  /// Busca si ya hay un viaje en curso al abrir la pantalla.
+  /// El viaje se cerró: el banner desaparece en el acto, sin esperar a
+  /// que nadie recargue la pantalla.
+  void _onViajeCerrado(dynamic data) {
+    if (!mounted) return;
+    setState(() => _viajeActivo = null);
+  }
+
+  /// Pregunta al backend si hay un viaje activo.
   ///
-  /// Depender solo del aviso en vivo era frágil: si el aviso se perdió
-  /// —app cerrada, sin red, o el fallo de salas que arreglamos— el
-  /// usuario se quedaba aquí sin forma de volver a su propio viaje.
+  /// Depender solo del aviso en vivo era frágil: si se perdía —app
+  /// cerrada, sin red— el usuario se quedaba sin forma de volver a su
+  /// propio viaje.
   Future<void> _buscarViajeActivo() async {
     final usuarioId = context.read<AuthProvider>().usuarioActual?.id;
     if (usuarioId == null) return;
@@ -42,6 +56,9 @@ class _InicioPasajeroPageState extends State<InicioPasajeroPage> {
   void initState() {
     super.initState();
     _buscarViajeActivo();
+    WidgetsBinding.instance.addObserver(this);
+    SocketService.instance.onViajeFinalizado(_onViajeCerrado);
+    SocketService.instance.onViajeCancelado(_onViajeCerrado);
     final pasajeroId = context.read<AuthProvider>().usuarioActual?.id;
     if (pasajeroId != null) {
       // El conductor puede aceptar/contraofertar mientras el pasajero está
@@ -55,7 +72,19 @@ class _InicioPasajeroPageState extends State<InicioPasajeroPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState estado) {
+    super.didChangeAppLifecycleState(estado);
+    // Estando en segundo plano el viaje pudo terminar sin que llegara el
+    // aviso, así que al volver se comprueba.
+    if (estado == AppLifecycleState.resumed) _buscarViajeActivo();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    SocketService.instance
+        .off(SocketEvents.viajeFinalizado, _onViajeCerrado);
+    SocketService.instance.off(SocketEvents.viajeCancelado, _onViajeCerrado);
     SocketService.instance.off(SocketEvents.ofertaCreada, _onOferta);
     SocketService.instance.off(SocketEvents.contraOfertaCreada, _onOferta);
     final pasajeroId = context.read<AuthProvider>().usuarioActual?.id;
@@ -92,6 +121,12 @@ class _InicioPasajeroPageState extends State<InicioPasajeroPage> {
     if (context.mounted) context.go(AppRoutes.roleSelection);
   }
 
+  /// Vuelve a la pantalla del viaje y, al regresar, revisa si sigue vivo.
+  Future<void> _abrirViaje(String viajeId) async {
+    await context.push(AppRoutes.viajeEnCursoPath(viajeId));
+    if (mounted) _buscarViajeActivo();
+  }
+
   @override
   Widget build(BuildContext context) {
     final usuario = context.watch<AuthProvider>().usuarioActual;
@@ -118,8 +153,7 @@ class _InicioPasajeroPageState extends State<InicioPasajeroPage> {
               titulo: 'Tienes un viaje en curso',
               detalle:
                   'Conductor: ${_viajeActivo!.conductor.usuario.nombre}',
-              onEntrar: () =>
-                  context.push(AppRoutes.viajeEnCursoPath(_viajeActivo!.id)),
+              onEntrar: () => _abrirViaje(_viajeActivo!.id),
             ),
           Expanded(
             child: Center(
