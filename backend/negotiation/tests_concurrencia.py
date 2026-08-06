@@ -1,6 +1,5 @@
-from rest_framework.test import APIClient
-
 from core.testing import FirestoreTestCase
+from users.domain.entities import RolUsuario
 
 
 class ConcurrenciaNegociacionTests(FirestoreTestCase):
@@ -15,7 +14,6 @@ class ConcurrenciaNegociacionTests(FirestoreTestCase):
 
     def setUp(self):
         super().setUp()
-        self.client = APIClient()
         self.pasajero = self.crear_usuario(
             nombre='Pasajero Test', correo='pasajero.conc@motolink.com',
         )
@@ -29,20 +27,24 @@ class ConcurrenciaNegociacionTests(FirestoreTestCase):
             nombre='Conductor B', correo='conductor.b@motolink.com',
             licencia='LIC-B', placa='BBB-002', marca='Yamaha', modelo='Crypton',
         )
+        # Tres sesiones distintas: el pasajero y los dos conductores que
+        # compiten por su solicitud.
+        self.client = self.cliente_de(self.pasajero)
+        self.client_a = self.cliente_de(self.conductor_a.usuario)
+        self.client_b = self.cliente_de(self.conductor_b.usuario)
 
     def test_dos_conductores_responden_y_solo_uno_es_seleccionable(self):
         """Ambos conductores pueden responder a la misma solicitud abierta
         (ambos compiten); el pasajero solo puede seleccionar una vez."""
-        respuesta_a = self.client.post(
+        respuesta_a = self.client_a.post(
             f'/api/solicitudes-viaje/{self.solicitud.id}/aceptar/',
-            {'conductor_id': str(self.conductor_a.usuario_id)}, format='json',
+            {}, format='json',
         )
         self.assertEqual(respuesta_a.status_code, 201)
 
-        respuesta_b = self.client.post(
+        respuesta_b = self.client_b.post(
             f'/api/solicitudes-viaje/{self.solicitud.id}/contraofertar/',
-            {'conductor_id': str(self.conductor_b.usuario_id), 'tarifa': 8},
-            format='json',
+            {'tarifa': 8}, format='json',
         )
         self.assertEqual(respuesta_b.status_code, 201)
 
@@ -62,9 +64,9 @@ class ConcurrenciaNegociacionTests(FirestoreTestCase):
     def test_seleccionar_la_misma_oferta_dos_veces_devuelve_409(self):
         """Doble tap del pasajero: la segunda selección no debe crear un
         segundo viaje para la misma solicitud."""
-        oferta = self.client.post(
+        oferta = self.client_a.post(
             f'/api/solicitudes-viaje/{self.solicitud.id}/aceptar/',
-            {'conductor_id': str(self.conductor_a.usuario_id)}, format='json',
+            {}, format='json',
         ).data
 
         primera = self.client.post(f"/api/ofertas/{oferta['id']}/seleccionar/")
@@ -87,16 +89,22 @@ class ConcurrenciaNegociacionTests(FirestoreTestCase):
         self.assertIn('detail', respuesta.data)
 
     def test_aceptar_con_solicitud_inexistente_devuelve_404_no_500(self):
-        respuesta = self.client.post(
+        respuesta = self.client_a.post(
             '/api/solicitudes-viaje/00000000-0000-0000-0000-000000000000/aceptar/',
-            {'conductor_id': str(self.conductor_a.usuario_id)}, format='json',
+            {}, format='json',
         )
         self.assertEqual(respuesta.status_code, 404)
 
-    def test_aceptar_con_conductor_inexistente_devuelve_404(self):
-        respuesta = self.client.post(
+    def test_mototaxista_sin_perfil_de_vehiculo_devuelve_404(self):
+        """El conductor ya no llega en el cuerpo, sale de la sesión. Queda
+        el caso de un usuario con rol mototaxista al que le falta el
+        perfil de vehículo."""
+        sin_perfil = self.crear_usuario(
+            nombre='Sin Perfil', correo='sin.perfil@motolink.com',
+            rol=RolUsuario.MOTOTAXISTA,
+        )
+        respuesta = self.cliente_de(sin_perfil).post(
             f'/api/solicitudes-viaje/{self.solicitud.id}/aceptar/',
-            {'conductor_id': '00000000-0000-0000-0000-000000000000'},
-            format='json',
+            {}, format='json',
         )
         self.assertEqual(respuesta.status_code, 404)

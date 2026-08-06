@@ -9,7 +9,15 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
+from rest_framework.permissions import IsAuthenticated
+
 from core import di
+from core.permissions import (
+    EsMototaxista,
+    EsPasajero,
+    es_administrador,
+    participa_en_viaje,
+)
 from core.realtime.notifier import SocketIORealtimeNotifier
 from negotiation.application.services import NegotiationService
 from negotiation.domain.exceptions import (
@@ -40,8 +48,19 @@ def _conflicto(detalle):
     return Response({'detail': detalle}, status=status.HTTP_409_CONFLICT)
 
 
+def _prohibido(detalle='No tienes permiso para acceder a este recurso.'):
+    return Response({'detail': detalle}, status=status.HTTP_403_FORBIDDEN)
+
+
 class SolicitudViajeViewSet(ViewSet):
     serializer_class = SolicitudViajeSerializer
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [EsPasajero()]
+        if self.action in ('aceptar', 'contraofertar', 'rechazar'):
+            return [EsMototaxista()]
+        return [IsAuthenticated()]
 
     def list(self, request):
         solicitudes = ListarSolicitudesDisponiblesUseCase(di.solicitud_repo()).execute()
@@ -62,7 +81,10 @@ class SolicitudViajeViewSet(ViewSet):
             di.solicitud_repo(), notifier=SocketIORealtimeNotifier(),
         )
         solicitud = usecase.execute(
-            pasajero=serializer.validated_data['pasajero_id'],
+            # El pasajero sale de la sesión. El campo 'pasajero' del cuerpo
+            # se ignora a propósito: antes se usaba tal cual, y permitía
+            # crear solicitudes en nombre de cualquier otro usuario.
+            pasajero=request.user,
             origen=serializer.validated_data['origen'],
             destino=serializer.validated_data['destino'],
             tarifa_propuesta=serializer.validated_data['tarifa_propuesta'],
@@ -72,14 +94,22 @@ class SolicitudViajeViewSet(ViewSet):
         )
 
     def destroy(self, request, pk=None):
+        repo = di.solicitud_repo()
         try:
-            di.solicitud_repo().eliminar(pk)
+            solicitud = repo.obtener_por_id(pk)
         except SolicitudNoEncontradaError:
             return _no_encontrado()
+        # Solo el pasajero que la creó puede cancelar su solicitud.
+        if str(solicitud.pasajero_id) != str(request.user.id) and not es_administrador(
+            request.user,
+        ):
+            return _prohibido()
+        repo.eliminar(pk)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _conductor_de(self, request):
-        return di.mototaxista_repo().obtener_por_id(request.data.get('conductor_id'))
+        # El conductor es quien tiene la sesión, no un id del cuerpo.
+        return di.mototaxista_repo().obtener_por_id(request.user.id)
 
     def _responder(self, request, pk, operacion, **extra):
         """Las tres respuestas del conductor (aceptar, contraofertar y
@@ -117,6 +147,16 @@ class SolicitudViajeViewSet(ViewSet):
     @action(detail=True, methods=['get'])
     def ofertas(self, request, pk=None):
         """5. El pasajero consulta las ofertas recibidas para su solicitud."""
+        try:
+            solicitud = di.solicitud_repo().obtener_por_id(pk)
+        except SolicitudNoEncontradaError:
+            return _no_encontrado()
+        # Las ofertas recibidas son información del pasajero dueño de la
+        # solicitud: un tercero no debe ver quién ofertó ni a qué precio.
+        if str(solicitud.pasajero_id) != str(request.user.id) and not es_administrador(
+            request.user,
+        ):
+            return _prohibido()
         ofertas = NegotiationService().listar_ofertas(pk)
         return Response(OfertaSerializer(ofertas, many=True).data)
 
@@ -125,7 +165,11 @@ class ViajeViewSet(ViewSet):
     serializer_class = ViajeSerializer
 
     def list(self, request):
-        viajes = di.viaje_repo().listar()
+        # El listado global es de administración; el resto ve los suyos.
+        if es_administrador(request.user):
+            viajes = di.viaje_repo().listar()
+        else:
+            viajes = di.viaje_repo().listar_por_usuario(request.user.id)
         return Response(ViajeSerializer(viajes, many=True).data)
 
     def retrieve(self, request, pk=None):
@@ -133,12 +177,16 @@ class ViajeViewSet(ViewSet):
             viaje = di.viaje_repo().obtener_por_id(pk)
         except ViajeNoEncontradoError:
             return _no_encontrado()
+        if not participa_en_viaje(request.user, viaje):
+            return _prohibido()
         return Response(ViajeSerializer(viaje).data)
 
     @action(detail=False, methods=['get'])
     def activo(self, request):
+        # El parámetro usuarioId se ignora: siempre es el de la sesión.
+        # Antes permitía espiar el viaje en curso de cualquier otro.
         viajes = di.viaje_repo().listar_por_usuario(
-            request.query_params.get('usuarioId'), estados=ESTADOS_VIAJE_ACTIVO,
+            request.user.id, estados=ESTADOS_VIAJE_ACTIVO,
         )
         if not viajes:
             return Response(status=status.HTTP_404_NOT_FOUND)
@@ -151,6 +199,9 @@ class ViajeViewSet(ViewSet):
             viaje = repo.obtener_por_id(pk)
         except ViajeNoEncontradoError:
             return _no_encontrado()
+        # Solo el pasajero o el conductor de ESE viaje pueden cerrarlo.
+        if not participa_en_viaje(request.user, viaje):
+            return _prohibido('No participas en este viaje.')
         viaje.estado = EstadoViaje.FINALIZADO
         repo.guardar(viaje)
         return Response(ViajeSerializer(viaje).data)
@@ -160,7 +211,13 @@ class HistorialView(ViewSet):
     serializer_class = ViajeSerializer
 
     def list(self, request):
-        usuario_id = request.query_params.get('usuarioId')
+        # Igual que en 'activo': el historial es siempre el propio, salvo
+        # que un administrador pregunte explícitamente por otro usuario.
+        pedido = request.query_params.get('usuarioId')
+        if pedido and es_administrador(request.user):
+            usuario_id = pedido
+        else:
+            usuario_id = str(request.user.id)
         viajes = di.viaje_repo().listar_por_usuario(usuario_id)
         return Response({
             'id': usuario_id,

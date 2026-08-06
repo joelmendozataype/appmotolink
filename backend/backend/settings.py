@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -26,16 +27,26 @@ load_dotenv(BASE_DIR / '.env')
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# El default solo es válido para desarrollo local; en producción se debe
-# definir DJANGO_SECRET_KEY en el .env con una clave propia y secreta.
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-je#g)z+y^f8m86+#bcgiqx(xwj(3%aud@xhk6x4cckj1j97tg)',
-)
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
+
+# SECURITY WARNING: keep the secret key used in production secret!
+#
+# Las sesiones se firman con esta clave (SESSION_ENGINE = signed_cookies),
+# así que quien la conozca puede fabricarse una sesión de cualquier
+# usuario. Por eso, con DEBUG=False, arrancar sin DJANGO_SECRET_KEY es un
+# error duro: es preferible que el despliegue falle a que se levante
+# firmando sesiones con una clave pública que está en el repositorio.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '')
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY es obligatorio con DJANGO_DEBUG=False. '
+            'Genera una con:\n'
+            "  python -c \"from django.core.management.utils import "
+            'get_random_secret_key as g; print(g())"',
+        )
+    SECRET_KEY = 'django-insecure-solo-para-desarrollo-local-no-usar-en-produccion'
 
 ALLOWED_HOSTS = os.environ.get(
     'DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost,10.0.2.2',
@@ -60,21 +71,46 @@ INSTALLED_APPS = [
     'ratings',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS. La app Android no envía cabecera Origin, así que esto solo afecta
+# a la versión web. Abrir a todos los orígenes con credenciales activas
+# permitiría a cualquier página robar sesiones, por eso en producción se
+# exige la lista explícita de dominios.
 CORS_ALLOW_CREDENTIALS = True
+_origenes = os.environ.get('DJANGO_CORS_ORIGINS', '').strip()
+if _origenes:
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in _origenes.split(',') if o.strip()]
+    CORS_ALLOW_ALL_ORIGINS = False
+else:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            'DJANGO_CORS_ORIGINS es obligatorio con DJANGO_DEBUG=False. '
+            'Indica los orígenes permitidos separados por coma, por ejemplo: '
+            'https://motolink.example.com',
+        )
+    # Solo en desarrollo: permite `flutter run -d chrome`, que usa un
+    # puerto distinto en cada arranque.
+    CORS_ALLOW_ALL_ORIGINS = True
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'core.authentication.SesionUsuarioAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ],
-    # AllowAny por defecto: la autenticación es por sesión Django (no JWT)
-    # y la mayoría de acciones (negociación, listados) no la requieren.
-    # Las que sí la requieren (logout, /me) declaran IsAuthenticated
-    # explícitamente. Etapa siguiente: JWT si se necesita stateless auth.
+    # IsAuthenticated por defecto: toda ruta exige sesión salvo que
+    # declare lo contrario. Antes el default era AllowAny, y como el actor
+    # (pasajero_id, conductor_id) viajaba en el cuerpo de la petición,
+    # cualquiera podía suplantar a otro usuario o borrar cuentas.
+    # Las excepciones son el registro y el login, marcados con AllowAny.
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ],
+    # Freno a la fuerza bruta contra el login y al alta masiva de cuentas.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '10/min',
+        'registro': '20/hour',
+    },
     # Por defecto DRF serializa DecimalField como string (ej. "9.00") para
     # no perder precisión. El cliente Dart espera num en tarifas (tarifa_propuesta,
     # tarifa_final, tarifa de Oferta); con el valor por defecto el cast
@@ -144,6 +180,32 @@ FIREBASE_PROJECT_ID = os.environ.get('FIREBASE_PROJECT_ID', '')
 # Sesiones firmadas en cookie: no necesitan tabla django_session, así que
 # el login tampoco depende de SQL.
 SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
+
+# La cookie de sesión no debe ser legible desde JavaScript.
+SESSION_COOKIE_HTTPONLY = True
+# Cierra la sesión a los 7 días aunque el usuario no haga logout.
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 7
+
+# Endurecimiento para cuando el backend queda expuesto a internet. En
+# desarrollo local queda desactivado, porque no hay TLS y forzar cookies
+# "secure" impediría iniciar sesión sobre http://.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SSL_REDIRECT', 'True') == 'True'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # 1 año, pero se arranca con un valor bajo si es la primera vez: HSTS
+    # es difícil de revertir si el dominio aún no sirve HTTPS estable.
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_HSTS_SECONDS', 3600))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    # Detrás de nginx o de un PaaS, la petición llega por http al proceso;
+    # esta cabecera es la que le dice a Django que el cliente sí usó TLS.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    # La app móvil manda la cookie desde su propio origen.
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_TRUSTED_ORIGINS = [
+        o for o in os.environ.get('DJANGO_CORS_ORIGINS', '').split(',') if o.strip()
+    ]
 
 
 # Password validation

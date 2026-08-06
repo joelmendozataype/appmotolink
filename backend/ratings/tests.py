@@ -1,5 +1,3 @@
-from rest_framework.test import APIClient
-
 from core.testing import FirestoreTestCase
 from trips.domain.entities import EstadoSolicitud, EstadoViaje
 
@@ -11,7 +9,6 @@ class CalificacionTests(FirestoreTestCase):
 
     def setUp(self):
         super().setUp()
-        self.client = APIClient()
         pasajero = self.crear_usuario(
             nombre='Pasajero Test', correo='pasajero.rating@motolink.com',
         )
@@ -29,6 +26,9 @@ class CalificacionTests(FirestoreTestCase):
         )
         self.viaje.estado = EstadoViaje.FINALIZADO
         self.viajes.guardar(self.viaje)
+        # Calificar exige ser el pasajero de ese viaje.
+        self.client = self.cliente_de(pasajero)
+        self.conductor_usuario = conductor.usuario
 
     def test_calificacion_valida_se_persiste(self):
         respuesta = self.client.post(

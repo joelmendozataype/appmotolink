@@ -73,8 +73,14 @@ class LoginRegistroTests(FirestoreTestCase):
             nombre='Conductor Uno', correo='c1@motolink.com',
             licencia='LIC-1', placa='AAA-111',
         )
+        # El listado con los correos de todos es dato sensible: solo el
+        # administrador, que es quien lo usa desde las pantallas /admin.
+        admin = self.crear_usuario(
+            nombre='Admin', correo='admin@motolink.com',
+            rol=RolUsuario.ADMINISTRADOR,
+        )
 
-        respuesta = self.client.get('/api/usuarios/pasajeros/')
+        respuesta = self.cliente_de(admin).get('/api/usuarios/pasajeros/')
         self.assertEqual(respuesta.status_code, 200)
         correos = [u['correo'] for u in respuesta.data]
         self.assertIn('p1@motolink.com', correos)
