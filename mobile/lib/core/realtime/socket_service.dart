@@ -170,4 +170,25 @@ class SocketService {
 
   void onViajeFinalizado(void Function(dynamic data) handler) =>
       on(SocketEvents.viajeFinalizado, handler);
+
+  void onUbicacionActualizada(void Function(dynamic data) handler) =>
+      on(SocketEvents.ubicacionActualizada, handler);
+
+  /// Envía la propia posición a la otra parte del viaje.
+  ///
+  /// No pasa por la API REST ni se guarda: es un dato efímero que cambia
+  /// cada pocos segundos y solo importa mientras dura el trayecto.
+  void enviarUbicacion({
+    required String viajeId,
+    required double lat,
+    required double lng,
+    String? rol,
+  }) {
+    _socket?.emit('ubicacion', {
+      'viajeId': viajeId,
+      'lat': lat,
+      'lng': lng,
+      'rol': rol,
+    });
+  }
 }

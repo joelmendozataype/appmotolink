@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:mobile/core/di/service_locator.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/location/location_service.dart';
@@ -30,6 +31,14 @@ class _ViajeAsignadoPageState extends State<ViajeAsignadoPage> {
 
   Position? _posicionActual;
   final List<Position> _recorrido = [];
+
+  /// Última posición conocida de la otra parte, recibida en vivo.
+  LatLng? _posicionOtro;
+
+  /// Para no saturar: se manda como mucho una posición cada 5 segundos,
+  /// aunque el GPS avise más a menudo. Con la moto en marcha eso ya da un
+  /// seguimiento fluido y no castiga la batería ni los datos.
+  DateTime? _ultimoEnvio;
   StreamSubscription<Position>? _suscripcionUbicacion;
 
   @override
@@ -38,11 +47,15 @@ class _ViajeAsignadoPageState extends State<ViajeAsignadoPage> {
     _cargarViaje();
     _iniciarSeguimientoGps();
     _escucharCancelacion();
+    _escucharUbicacionDelOtro();
   }
 
   @override
   void dispose() {
     SocketService.instance.off(SocketEvents.viajeCancelado, _onViajeCancelado);
+    SocketService.instance
+        .off(SocketEvents.ubicacionActualizada, _onUbicacionOtro);
+    SocketService.instance.leaveRoom(SocketRooms.viaje(widget.viajeId));
     _suscripcionUbicacion?.cancel();
     super.dispose();
   }
@@ -58,12 +71,14 @@ class _ViajeAsignadoPageState extends State<ViajeAsignadoPage> {
         _posicionActual = inicial;
         _recorrido.add(inicial);
       });
+      _compartirUbicacion(inicial);
       _suscripcionUbicacion = LocationCalculos.seguirUbicacion().listen((pos) {
         if (!mounted) return;
         setState(() {
           _posicionActual = pos;
           _recorrido.add(pos);
         });
+        _compartirUbicacion(pos);
       });
     } on LocationPermissionDeniedException {
       // Sin GPS el viaje continúa igual; no es un error bloqueante.
@@ -96,6 +111,36 @@ class _ViajeAsignadoPageState extends State<ViajeAsignadoPage> {
         const SnackBar(content: Text('La otra persona canceló el viaje')),
       );
       context.go(AppRoutes.inicioMototaxista);
+  }
+
+  /// Ambas partes entran en la sala del viaje y se mandan su posición.
+  void _escucharUbicacionDelOtro() {
+    SocketService.instance.joinRoom(SocketRooms.viaje(widget.viajeId));
+    SocketService.instance.onUbicacionActualizada(_onUbicacionOtro);
+  }
+
+  void _onUbicacionOtro(dynamic data) {
+    if (!mounted || data is! Map) return;
+    if (data['viajeId'] != widget.viajeId) return;
+    final lat = (data['lat'] as num?)?.toDouble();
+    final lng = (data['lng'] as num?)?.toDouble();
+    if (lat == null || lng == null) return;
+    setState(() => _posicionOtro = LatLng(lat, lng));
+  }
+
+  void _compartirUbicacion(Position pos) {
+    final ahora = DateTime.now();
+    if (_ultimoEnvio != null &&
+        ahora.difference(_ultimoEnvio!) < const Duration(seconds: 5)) {
+      return;
+    }
+    _ultimoEnvio = ahora;
+    SocketService.instance.enviarUbicacion(
+      viajeId: widget.viajeId,
+      lat: pos.latitude,
+      lng: pos.longitude,
+      rol: 'mototaxista',
+    );
   }
 
   Future<void> _cancelarViaje() async {
@@ -174,6 +219,9 @@ class _ViajeAsignadoPageState extends State<ViajeAsignadoPage> {
           : MapaViaje(
               posicion: _posicionActual,
               recorrido: _recorrido,
+              posicionOtro: _posicionOtro,
+              iconoOtro: Icons.person_pin_circle,
+              etiquetaOtro: 'tu pasajero',
               icono: Icons.two_wheeler,
             ),
       // Ver la nota en viaje_en_curso_page: al vivir en bottomNavigationBar,

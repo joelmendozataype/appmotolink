@@ -26,12 +26,26 @@ class MapaViaje extends StatefulWidget {
   /// Texto que se muestra bajo el mapa (distancia recorrida, estado...).
   final String? leyenda;
 
+  /// Posición de la otra parte, recibida en vivo por Socket.IO. Null hasta
+  /// que envía la primera, o si no tiene el GPS activo.
+  final LatLng? posicionOtro;
+
+  /// Icono de la otra parte: la moto si soy el pasajero, la persona si soy
+  /// el conductor.
+  final IconData iconoOtro;
+
+  /// Cómo llamar a la otra parte en la leyenda.
+  final String etiquetaOtro;
+
   const MapaViaje({
     super.key,
     required this.posicion,
     this.recorrido = const [],
     this.icono = Icons.my_location,
     this.leyenda,
+    this.posicionOtro,
+    this.iconoOtro = Icons.person_pin_circle,
+    this.etiquetaOtro = 'La otra persona',
   });
 
   @override
@@ -102,17 +116,28 @@ class _MapaViajeState extends State<MapaViaje> {
                   ),
                 ],
               ),
-            if (punto != null)
-              MarkerLayer(
-                markers: [
+            MarkerLayer(
+              markers: [
+                if (widget.posicionOtro != null)
+                  Marker(
+                    point: widget.posicionOtro!,
+                    width: 44,
+                    height: 44,
+                    child: _Pin(
+                      icono: widget.iconoOtro,
+                      // Color distinto para no confundir quién es quién.
+                      color: colores.tertiary,
+                    ),
+                  ),
+                if (punto != null)
                   Marker(
                     point: punto,
                     width: 44,
                     height: 44,
                     child: _Pin(icono: widget.icono, color: colores.primary),
                   ),
-                ],
-              ),
+              ],
+            ),
             // La atribución no es decorativa: la licencia de
             // OpenStreetMap obliga a mostrar el crédito.
             const RichAttributionWidget(
@@ -134,6 +159,12 @@ class _MapaViajeState extends State<MapaViaje> {
             bottom: 12,
             left: 12,
             child: _Aviso(widget.leyenda!),
+          ),
+        if (widget.posicionOtro == null && punto != null)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: _Aviso('Esperando ubicación de ${widget.etiquetaOtro}'),
           ),
       ],
     );

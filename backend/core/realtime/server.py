@@ -2,6 +2,8 @@ import logging
 
 import socketio
 
+from core.realtime.events import RealtimeEvents, room_viaje
+
 logger = logging.getLogger('motolink.realtime')
 
 # async_mode explícito: 'threading'.
@@ -47,3 +49,33 @@ def leave_room(sid, data):
     room = data.get('room')
     if room:
         sio.leave_room(sid, room)
+
+
+@sio.event
+def ubicacion(sid, data):
+    """Retransmite la posición de una parte a la otra durante el viaje.
+
+    No se guarda en Firestore a propósito: cambia cada pocos segundos y
+    solo interesa mientras dura el trayecto. Persistirla gastaría cuota de
+    escritura sin que nadie fuera a consultarla después.
+
+    Se reenvía únicamente a la sala del viaje, y se excluye a quien la
+    envió: ya conoce su propia posición.
+    """
+    viaje_id = (data or {}).get('viajeId')
+    if not viaje_id:
+        return
+    if data.get('lat') is None or data.get('lng') is None:
+        return
+
+    sio.emit(
+        RealtimeEvents.UBICACION_ACTUALIZADA,
+        {
+            'viajeId': viaje_id,
+            'lat': data['lat'],
+            'lng': data['lng'],
+            'rol': data.get('rol'),
+        },
+        room=room_viaje(viaje_id),
+        skip_sid=sid,
+    )
