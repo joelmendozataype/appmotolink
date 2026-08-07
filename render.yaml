@@ -51,11 +51,12 @@ services:
       - key: DJANGO_ALLOWED_HOSTS
         value: "127.0.0.1,localhost"
 
-      # Orígenes web autorizados. La app Android no manda cabecera Origin,
-      # así que esto solo importa si además sirves la versión web.
-      # Ajustar al dominio real una vez creado el servicio.
+      # Orígenes web autorizados, ADEMÁS del dominio propio del servicio,
+      # que settings.py agrega solo a partir de RENDER_EXTERNAL_HOSTNAME.
+      # Solo hace falta si sirves la web desde otro dominio; en blanco,
+      # el servicio ya se acepta a sí mismo.
       - key: DJANGO_CORS_ORIGINS
-        sync: false
+        value: ""
 
       - key: MOTOLINK_DB_BACKEND
         value: firestore

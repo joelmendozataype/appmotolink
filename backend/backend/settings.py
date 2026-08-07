@@ -85,20 +85,34 @@ INSTALLED_APPS = [
 # permitiría a cualquier página robar sesiones, por eso en producción se
 # exige la lista explícita de dominios.
 CORS_ALLOW_CREDENTIALS = True
-_origenes = os.environ.get('DJANGO_CORS_ORIGINS', '').strip()
-if _origenes:
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in _origenes.split(',') if o.strip()]
+
+CORS_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get('DJANGO_CORS_ORIGINS', '').split(',')
+    if o.strip()
+]
+
+# El propio dominio se agrega solo. El nombre que asigna la plataforma no
+# se conoce hasta que el servicio existe, así que pedirlo por
+# configuración manual se olvidaba: durante días el dominio real quedó
+# fuera de la lista y la versión web no habría podido llamar a la API.
+if _dominio_render:
+    _propio = f'https://{_dominio_render}'
+    if _propio not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(_propio)
+
+if CORS_ALLOWED_ORIGINS:
     CORS_ALLOW_ALL_ORIGINS = False
-else:
-    if not DEBUG:
-        raise ImproperlyConfigured(
-            'DJANGO_CORS_ORIGINS es obligatorio con DJANGO_DEBUG=False. '
-            'Indica los orígenes permitidos separados por coma, por ejemplo: '
-            'https://motolink.example.com',
-        )
+elif DEBUG:
     # Solo en desarrollo: permite `flutter run -d chrome`, que usa un
     # puerto distinto en cada arranque.
     CORS_ALLOW_ALL_ORIGINS = True
+else:
+    raise ImproperlyConfigured(
+        'No hay ningún origen permitido para CORS. Define '
+        'DJANGO_CORS_ORIGINS con los dominios autorizados, separados por '
+        'coma; por ejemplo: https://motolink.example.com',
+    )
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
