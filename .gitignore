@@ -23,6 +23,10 @@ mobile/.dart_tool/
 .idea/
 *.iml
 
+# Archivos temporales de Office: los crea Word al abrir un documento y
+# desaparecen al cerrarlo.
+~$*
+
 # OS
 .DS_Store
 Thumbs.db
