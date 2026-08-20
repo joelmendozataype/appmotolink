@@ -6,6 +6,7 @@ import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/core/utils/sesion_guard.dart';
 import 'package:mobile/features/trip_request/domain/entities/solicitud_viaje_entity.dart';
+import 'package:mobile/shared/widgets/campo_tarifa.dart';
 
 class ProponerTarifaPage extends StatefulWidget {
   final String origen;
@@ -69,15 +70,29 @@ class _ProponerTarifaPageState extends State<ProponerTarifaPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Antes solo se veían los dos nombres, uno encima del
+                // otro: no había forma de saber cuál era el origen y cuál
+                // el destino salvo por el orden.
                 Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.my_location),
-                    title: Text(widget.origen),
-                    subtitle: Row(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.arrow_downward, size: 16),
-                        const SizedBox(width: 8),
-                        Text(widget.destino),
+                        _Lugar(
+                          icono: Icons.my_location,
+                          etiqueta: 'Lugar de origen',
+                          nombre: widget.origen,
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: Icon(Icons.arrow_downward, size: 18),
+                        ),
+                        _Lugar(
+                          icono: Icons.flag,
+                          etiqueta: 'Lugar de destino',
+                          nombre: widget.destino,
+                        ),
                       ],
                     ),
                   ),
@@ -85,19 +100,9 @@ class _ProponerTarifaPageState extends State<ProponerTarifaPage> {
                 const SizedBox(height: 24),
                 Form(
                   key: _formKey,
-                  child: TextFormField(
+                  child: CampoTarifa(
                     controller: _tarifaController,
-                    decoration: const InputDecoration(
-                      labelText: '¿Cuánto quieres pagar? (S/)',
-                      prefixIcon: Icon(Icons.attach_money),
-                    ),
-                    keyboardType: TextInputType.numberWithOptions(decimal: true),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Ingresa una tarifa';
-                      final n = double.tryParse(v);
-                      if (n == null || n <= 0) return 'Tarifa inválida';
-                      return null;
-                    },
+                    etiqueta: '¿Cuánto quieres pagar?',
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -119,6 +124,50 @@ class _ProponerTarifaPageState extends State<ProponerTarifaPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Un lugar del viaje, con su etiqueta encima para no confundir el origen
+/// con el destino.
+class _Lugar extends StatelessWidget {
+  final IconData icono;
+  final String etiqueta;
+  final String nombre;
+
+  const _Lugar({
+    required this.icono,
+    required this.etiqueta,
+    required this.nombre,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colores = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icono, color: colores.primary),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                etiqueta,
+                style: TextStyle(fontSize: 12, color: colores.onSurfaceVariant),
+              ),
+              Text(
+                nombre,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

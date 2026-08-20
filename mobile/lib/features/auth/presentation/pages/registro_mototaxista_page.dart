@@ -79,16 +79,15 @@ class _RegistroMototaxistaPageState extends State<RegistroMototaxistaPage> {
                       controller: _nombreController,
                       decoration:
                           const InputDecoration(labelText: 'Nombre completo'),
-                      validator: (v) =>
-                          (v == null || v.isEmpty) ? 'Ingresa tu nombre' : null,
+                      textCapitalization: TextCapitalization.words,
+                      validator: Validaciones.nombre,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _correoController,
                       decoration: const InputDecoration(labelText: 'Correo'),
                       keyboardType: TextInputType.emailAddress,
-                      validator: (v) =>
-                          (v == null || v.isEmpty) ? 'Ingresa tu correo' : null,
+                      validator: Validaciones.correo,
                     ),
                     const SizedBox(height: 16),
                     CampoContrasena(

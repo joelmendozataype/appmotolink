@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/di/service_locator.dart';
@@ -29,12 +31,121 @@ class _RecuperarContrasenaPageState extends State<RecuperarContrasenaPage> {
   bool _codigoEnviado = false;
   bool _cargando = false;
 
+  /// En qué punto está la comprobación del correo contra el servidor.
+  _EstadoCorreo _estadoCorreo = _EstadoCorreo.vacio;
+  Timer? _esperaTecleo;
+
+  /// El último correo consultado, para no repetir la petición mientras el
+  /// usuario no cambie nada.
+  String _ultimoConsultado = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _correoController.addListener(_alEscribirCorreo);
+  }
+
   @override
   void dispose() {
+    _esperaTecleo?.cancel();
+    _correoController.removeListener(_alEscribirCorreo);
     _correoController.dispose();
     _codigoController.dispose();
     _contrasenaController.dispose();
     super.dispose();
+  }
+
+  /// Consulta al servidor si el correo existe, pero solo cuando el usuario
+  /// deja de teclear: sin esta espera se lanzaría una petición por cada
+  /// letra.
+  void _alEscribirCorreo() {
+    _esperaTecleo?.cancel();
+    final correo = _correoController.text.trim();
+
+    if (Validaciones.correo(correo) != null) {
+      // Ni siquiera tiene forma de correo: no hay nada que preguntar.
+      _ultimoConsultado = '';
+      _cambiarEstado(
+        correo.isEmpty ? _EstadoCorreo.vacio : _EstadoCorreo.formatoInvalido,
+      );
+      return;
+    }
+    if (correo == _ultimoConsultado) return;
+
+    _cambiarEstado(_EstadoCorreo.comprobando);
+    _esperaTecleo = Timer(
+      const Duration(milliseconds: 600),
+      () => _comprobarCorreo(correo),
+    );
+  }
+
+  Future<void> _comprobarCorreo(String correo) async {
+    try {
+      final registrado = await ServiceLocator.correoRegistrado(correo);
+      // Si mientras tanto siguió escribiendo, esta respuesta ya no vale.
+      if (!mounted || _correoController.text.trim() != correo) return;
+      _ultimoConsultado = correo;
+      _cambiarEstado(
+        registrado ? _EstadoCorreo.registrado : _EstadoCorreo.noRegistrado,
+      );
+    } catch (_) {
+      // Sin red no se puede saber. Se deja pasar en vez de bloquear el
+      // botón: el servidor volverá a comprobarlo al pedir el código.
+      if (!mounted || _correoController.text.trim() != correo) return;
+      _cambiarEstado(_EstadoCorreo.sinComprobar);
+    }
+  }
+
+  void _cambiarEstado(_EstadoCorreo estado) {
+    if (!mounted || _estadoCorreo == estado) return;
+    setState(() => _estadoCorreo = estado);
+  }
+
+  /// Si el botón "Enviarme el código" debe estar activo.
+  ///
+  /// Solo se habilita con una cuenta encontrada. La excepción es
+  /// `sinComprobar`: si no hubo red para preguntar, se deja intentar y que
+  /// decida el servidor, en vez de dejar al usuario sin salida.
+  bool get _puedeContinuar =>
+      _codigoEnviado ||
+      _estadoCorreo == _EstadoCorreo.registrado ||
+      _estadoCorreo == _EstadoCorreo.sinComprobar;
+
+  Widget? _iconoEstado() {
+    switch (_estadoCorreo) {
+      case _EstadoCorreo.comprobando:
+        return const Padding(
+          padding: EdgeInsets.all(14),
+          child: SizedBox(
+            height: 18,
+            width: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      case _EstadoCorreo.registrado:
+        return const Icon(Icons.check_circle, color: Colors.green);
+      case _EstadoCorreo.noRegistrado:
+        return const Icon(Icons.error_outline, color: Colors.red);
+      case _EstadoCorreo.vacio:
+      case _EstadoCorreo.formatoInvalido:
+      case _EstadoCorreo.sinComprobar:
+        return null;
+    }
+  }
+
+  String? _mensajeEstado() {
+    switch (_estadoCorreo) {
+      case _EstadoCorreo.formatoInvalido:
+        return Validaciones.correo(_correoController.text);
+      case _EstadoCorreo.noRegistrado:
+        return 'Ese correo no está registrado';
+      case _EstadoCorreo.sinComprobar:
+        return 'No se pudo comprobar. Puedes intentarlo igual.';
+      case _EstadoCorreo.vacio:
+      case _EstadoCorreo.comprobando:
+      case _EstadoCorreo.registrado:
+        return null;
+    }
   }
 
   void _avisar(String texto) {
@@ -45,8 +156,9 @@ class _RecuperarContrasenaPageState extends State<RecuperarContrasenaPage> {
   }
 
   Future<void> _pedirCodigo() async {
-    if (_correoController.text.trim().isEmpty) {
-      _avisar('Escribe tu correo');
+    final problema = Validaciones.correo(_correoController.text);
+    if (problema != null) {
+      _avisar(problema);
       return;
     }
     setState(() => _cargando = true);
@@ -56,9 +168,7 @@ class _RecuperarContrasenaPageState extends State<RecuperarContrasenaPage> {
       );
       if (!mounted) return;
       setState(() => _codigoEnviado = true);
-      // El mensaje es el mismo exista o no la cuenta: el backend no
-      // revela quién está registrado, y la app tampoco debe hacerlo.
-      _avisar('Si el correo está registrado, recibirás un código.');
+      _avisar('Te enviamos un código. Revisa tu correo.');
     } catch (e) {
       _avisar(mensajeDeError(e));
     } finally {
@@ -155,9 +265,19 @@ class _RecuperarContrasenaPageState extends State<RecuperarContrasenaPage> {
                           // Bloqueado tras enviar: cambiarlo aquí dejaría
                           // el código apuntando a otra cuenta.
                           enabled: !_codigoEnviado,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Correo',
-                            prefixIcon: Icon(Icons.mail_outline),
+                            prefixIcon: const Icon(Icons.mail_outline),
+                            // El resultado de la comprobación, en el
+                            // propio campo: es donde el usuario mira.
+                            suffixIcon: _codigoEnviado ? null : _iconoEstado(),
+                            errorText:
+                                _codigoEnviado ? null : _mensajeEstado(),
+                            helperText: _estadoCorreo ==
+                                    _EstadoCorreo.registrado
+                                ? 'Cuenta encontrada'
+                                : null,
+                            helperStyle: TextStyle(color: colores.primary),
                           ),
                         ),
                         if (_codigoEnviado) ...[
@@ -189,7 +309,7 @@ class _RecuperarContrasenaPageState extends State<RecuperarContrasenaPage> {
                         SizedBox(
                           height: 50,
                           child: FilledButton(
-                            onPressed: _cargando
+                            onPressed: (_cargando || !_puedeContinuar)
                                 ? null
                                 : (_codigoEnviado ? _restablecer : _pedirCodigo),
                             child: _cargando
@@ -227,4 +347,25 @@ class _RecuperarContrasenaPageState extends State<RecuperarContrasenaPage> {
       ),
     );
   }
+}
+
+/// En qué punto está la comprobación del correo contra el servidor.
+enum _EstadoCorreo {
+  /// Todavía no se ha escrito nada.
+  vacio,
+
+  /// No tiene forma de correo, así que no se pregunta al servidor.
+  formatoInvalido,
+
+  /// Consulta en curso.
+  comprobando,
+
+  /// Tiene cuenta activa: es el único caso que habilita el botón.
+  registrado,
+
+  /// No tiene cuenta: no serviría de nada enviar un código.
+  noRegistrado,
+
+  /// No hubo red para preguntar. Se deja continuar y decide el servidor.
+  sinComprobar,
 }

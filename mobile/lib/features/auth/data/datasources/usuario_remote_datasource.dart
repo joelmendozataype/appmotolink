@@ -7,6 +7,11 @@ abstract class UsuarioRemoteDataSource {
   Future<UsuarioModel> registrar(UsuarioModel usuario);
   Future<void> logout();
 
+  /// Si ese correo tiene una cuenta activa. Lo usa la pantalla de
+  /// recuperación para no dejar al usuario esperando un código que nunca
+  /// llegaría.
+  Future<bool> correoRegistrado(String correo);
+
   Future<void> pedirCodigoRecuperacion(String correo);
 
   Future<void> restablecerContrasena(
@@ -46,6 +51,14 @@ class UsuarioRemoteDataSourceImpl implements UsuarioRemoteDataSource {
   @override
   Future<void> logout() async {
     await client.post('${ApiConstants.usuarios}/logout', {});
+  }
+
+  @override
+  Future<bool> correoRegistrado(String correo) async {
+    final respuesta = await client.get(
+      '${ApiConstants.usuarios}/existe/?correo=${Uri.encodeQueryComponent(correo)}',
+    );
+    return respuesta['registrado'] == true;
   }
 
   @override

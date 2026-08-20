@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/core/enums/rol_usuario.dart';
 import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
+import 'package:mobile/core/utils/validaciones.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/shared/widgets/cabecera_curva.dart';
 import 'package:mobile/shared/widgets/campo_contrasena.dart';
@@ -12,6 +13,30 @@ class LoginPage extends StatefulWidget {
   final RolUsuario rol;
 
   const LoginPage({super.key, required this.rol});
+
+  static String nombreDeRol(RolUsuario rol) {
+    switch (rol) {
+      case RolUsuario.pasajero:
+        return 'Pasajero';
+      case RolUsuario.mototaxista:
+        return 'Mototaxista';
+      case RolUsuario.administrador:
+        return 'Administrador';
+    }
+  }
+
+  /// Por qué no se puede entrar, si la cuenta no es del rol elegido.
+  ///
+  /// Devuelve null cuando coinciden. Está aquí y no dentro del State para
+  /// poder comprobarla sin levantar la pantalla ni llamar al backend.
+  static String? mensajeSiElRolNoCoincide(
+    RolUsuario elegido,
+    RolUsuario real,
+  ) {
+    if (elegido == real) return null;
+    return 'Esa cuenta es de ${nombreDeRol(real)}. '
+        'Vuelve atrás y entra por esa opción.';
+  }
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -34,26 +59,39 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  String get _tituloRol {
-    switch (widget.rol) {
-      case RolUsuario.pasajero:
-        return 'Pasajero';
-      case RolUsuario.mototaxista:
-        return 'Mototaxista';
-      case RolUsuario.administrador:
-        return 'Administrador';
-    }
-  }
+  String get _tituloRol => LoginPage.nombreDeRol(widget.rol);
 
   Future<void> _ingresar() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _cargando = true);
+    // Se toma antes del await: después, usar `context` para localizarlo
+    // sería leerlo de un árbol que puede haber dejado de existir.
+    final auth = context.read<AuthProvider>();
     try {
-      final usuario = await context.read<AuthProvider>().login(
+      final usuario = await auth.login(
         _correoController.text.trim(),
         _contrasenaController.text,
         recordar: _recordarme,
       );
+
+      // Cada puerta abre solo su cuenta. Antes daba igual por dónde
+      // entraras: elegías "Soy Pasajero", escribías credenciales de
+      // conductor y la aplicación te llevaba igual al inicio del
+      // conductor, ignorando lo que habías elegido.
+      final desajuste = LoginPage.mensajeSiElRolNoCoincide(
+        widget.rol, usuario.rol,
+      );
+      if (desajuste != null) {
+        await auth.cerrarSesion();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(desajuste),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        return;
+      }
 
       String destino;
       switch (usuario.rol) {
@@ -144,14 +182,20 @@ class _LoginPageState extends State<LoginPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 40),
+                // Círculo blanco, no translúcido: la marca es azul y
+                // verde, y sobre el verde de la cabecera no se leería.
                 Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.22),
+                  padding: const EdgeInsets.all(12),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.electric_moped,
-                      size: 40, color: Colors.white),
+                  child: Image.asset(
+                    'assets/marca_motolink.png',
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.contain,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -236,8 +280,7 @@ class _LoginPageState extends State<LoginPage> {
                   hintText: 'tucorreo@ejemplo.com',
                   prefixIcon: Icon(Icons.mail_outline),
                 ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Ingresa tu correo' : null,
+                validator: Validaciones.correo,
               ),
               const SizedBox(height: 16),
               _etiqueta('Contraseña'),

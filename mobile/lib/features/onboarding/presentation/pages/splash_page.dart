@@ -50,21 +50,22 @@ class _SplashPageState extends State<SplashPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.electric_moped,
-              size: 96,
-              color: Theme.of(context).colorScheme.onPrimary,
+            // El logo va sobre un recuadro blanco porque sus dos colores
+            // —azul y verde— se pierden contra el verde del fondo. Y ya
+            // trae el nombre escrito, así que no se repite debajo.
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Image.asset(
+                'assets/logo_motolink.png',
+                width: 220,
+                fit: BoxFit.contain,
+              ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'MOTOLINK',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimary,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                  ),
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             CircularProgressIndicator(
               color: Theme.of(context).colorScheme.onPrimary,
             ),

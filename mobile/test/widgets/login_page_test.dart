@@ -19,6 +19,8 @@ Widget _pantalla(RolUsuario rol) {
 }
 
 void main() {
+  _pruebasDeRol();
+
   testWidgets('muestra la cabecera curva y el rol elegido', (tester) async {
     await tester.pumpWidget(_pantalla(RolUsuario.mototaxista));
 
@@ -73,5 +75,38 @@ void main() {
 
     await tester.pumpWidget(_pantalla(RolUsuario.pasajero));
     expect(find.text('Regístrate'), findsOneWidget);
+  });
+}
+
+void _pruebasDeRol() {
+  group('cada puerta abre solo su cuenta', () {
+    test('deja pasar cuando el rol coincide', () {
+      for (final rol in RolUsuario.values) {
+        expect(LoginPage.mensajeSiElRolNoCoincide(rol, rol), isNull);
+      }
+    });
+
+    test('rechaza cuando la cuenta es de otro rol', () {
+      // Antes daba igual por dónde entraras: elegías "Soy Pasajero",
+      // escribías credenciales de conductor y entrabas como conductor.
+      expect(
+        LoginPage.mensajeSiElRolNoCoincide(
+          RolUsuario.pasajero, RolUsuario.mototaxista,
+        ),
+        'Esa cuenta es de Mototaxista. Vuelve atrás y entra por esa opción.',
+      );
+      expect(
+        LoginPage.mensajeSiElRolNoCoincide(
+          RolUsuario.mototaxista, RolUsuario.administrador,
+        ),
+        'Esa cuenta es de Administrador. Vuelve atrás y entra por esa opción.',
+      );
+      expect(
+        LoginPage.mensajeSiElRolNoCoincide(
+          RolUsuario.administrador, RolUsuario.pasajero,
+        ),
+        'Esa cuenta es de Pasajero. Vuelve atrás y entra por esa opción.',
+      );
+    });
   });
 }

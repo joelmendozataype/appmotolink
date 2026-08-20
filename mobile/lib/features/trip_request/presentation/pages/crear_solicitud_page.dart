@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/location/location_service.dart';
 import 'package:mobile/core/routing/app_routes.dart';
+import 'package:mobile/core/utils/validaciones.dart';
 
 class CrearSolicitudPage extends StatefulWidget {
   const CrearSolicitudPage({super.key});
@@ -75,8 +76,9 @@ class _CrearSolicitudPageState extends State<CrearSolicitudPage> {
                               onPressed: _usarUbicacionActual,
                             ),
                     ),
+                    textCapitalization: TextCapitalization.sentences,
                     validator: (v) =>
-                        (v == null || v.isEmpty) ? 'Ingresa el origen' : null,
+                        Validaciones.lugar(v, campo: 'el origen'),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -85,8 +87,9 @@ class _CrearSolicitudPageState extends State<CrearSolicitudPage> {
                       labelText: 'Destino',
                       prefixIcon: Icon(Icons.flag),
                     ),
+                    textCapitalization: TextCapitalization.sentences,
                     validator: (v) =>
-                        (v == null || v.isEmpty) ? 'Ingresa el destino' : null,
+                        Validaciones.lugar(v, campo: 'el destino'),
                   ),
                   const SizedBox(height: 24),
                   FilledButton(

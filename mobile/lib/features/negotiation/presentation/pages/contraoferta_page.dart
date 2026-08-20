@@ -5,6 +5,7 @@ import 'package:mobile/core/error/exceptions.dart';
 import 'package:mobile/core/routing/app_routes.dart';
 import 'package:mobile/core/utils/sesion_guard.dart';
 import 'package:mobile/features/trip_request/domain/entities/solicitud_viaje_entity.dart';
+import 'package:mobile/shared/widgets/campo_tarifa.dart';
 import 'package:mobile/shared/widgets/error_retry_view.dart';
 
 /// El conductor responde a una solicitud: aceptar la tarifa propuesta,
@@ -137,23 +138,9 @@ class _ContraofertaPageState extends State<ContraofertaPage> {
                       const SizedBox(height: 16),
                       Form(
                         key: _formKey,
-                        child: TextFormField(
+                        child: CampoTarifa(
                           controller: _tarifaController,
-                          decoration: const InputDecoration(
-                            labelText: 'O propone tu tarifa (S/)',
-                            prefixIcon: Icon(Icons.attach_money),
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          validator: (v) {
-                            if (v == null || v.isEmpty) {
-                              return 'Ingresa una tarifa';
-                            }
-                            final n = double.tryParse(v);
-                            if (n == null || n <= 0) return 'Tarifa inválida';
-                            return null;
-                          },
+                          etiqueta: 'O propone tu tarifa',
                         ),
                       ),
                       const SizedBox(height: 12),
