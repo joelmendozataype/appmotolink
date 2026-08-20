@@ -31,7 +31,7 @@ class FechasTests(FirestoreTestCase):
     def test_la_solicitud_se_sella_al_crearse(self):
         respuesta = self.client.post(
             '/api/solicitudes-viaje/',
-            {'origen': 'A', 'destino': 'B', 'tarifa_propuesta': 5},
+            {'origen': 'Ahuaycha', 'destino': 'Pampas', 'tarifa_propuesta': 5},
             format='json',
         )
         self.assertEqual(respuesta.status_code, 201)

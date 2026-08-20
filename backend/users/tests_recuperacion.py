@@ -79,19 +79,55 @@ class RecuperacionTests(FirestoreTestCase):
             401,
         )
 
-    # --- no filtrar quién tiene cuenta ----------------------------------
+    # --- solo los correos registrados ------------------------------------
+    #
+    # Esta sección sustituyó a la anterior, que exigía la respuesta
+    # contraria: que un correo desconocido respondiera igual que uno
+    # registrado, para no revelar quién tiene cuenta. Se cambió a
+    # petición expresa, porque el usuario que se equivocaba al escribir su
+    # correo se quedaba esperando un mensaje que nunca llegaba. La
+    # contrapartida —se puede averiguar qué direcciones existen— quedó
+    # asumida y se frena con el límite por origen de /existe/.
 
-    def test_un_correo_inexistente_responde_igual(self):
-        """Si la respuesta cambiara, cualquiera podría averiguar quién
-        tiene cuenta probando direcciones."""
-        conocido = self._pedir()
-        cache.clear()
-        desconocido = self._pedir('nadie@motolink.com')
+    def test_un_correo_sin_cuenta_es_rechazado(self):
+        respuesta = self._pedir('nadie@motolink.com')
 
-        self.assertEqual(conocido.status_code, desconocido.status_code)
-        self.assertEqual(conocido.data['detail'], desconocido.data['detail'])
-        # Pero solo se envía correo al que existe.
-        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertEqual(respuesta.data['detail'], 'Ese correo no está registrado.')
+        # Y desde luego no se manda nada.
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_una_cuenta_desactivada_tampoco_recupera(self):
+        """Dar de baja a alguien no puede dejarle una puerta abierta."""
+        self.usuario.is_active = False
+        self.usuarios.guardar(self.usuario)
+
+        self.assertEqual(self._pedir().status_code, 404)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_existe_responde_si_el_correo_tiene_cuenta(self):
+        registrado = self.client.get(
+            '/api/usuarios/existe/', {'correo': 'ana.rec@motolink.com'},
+        )
+        desconocido = self.client.get(
+            '/api/usuarios/existe/', {'correo': 'nadie@motolink.com'},
+        )
+
+        self.assertEqual(registrado.status_code, 200)
+        self.assertTrue(registrado.data['registrado'])
+        self.assertFalse(desconocido.data['registrado'])
+
+    def test_existe_no_necesita_sesion(self):
+        """Se consulta desde la pantalla de recuperación, sin haber
+        entrado: si exigiera sesión no serviría para nada."""
+        respuesta = self.client.get(
+            '/api/usuarios/existe/', {'correo': 'ana.rec@motolink.com'},
+        )
+        self.assertEqual(respuesta.status_code, 200)
+
+    def test_existe_rechaza_lo_que_no_es_un_correo(self):
+        respuesta = self.client.get('/api/usuarios/existe/', {'correo': '12332werrd'})
+        self.assertEqual(respuesta.status_code, 400)
 
     # --- seguridad del código -------------------------------------------
 

@@ -135,6 +135,9 @@ REST_FRAMEWORK = {
         'login_origen': '30/min',   # por origen, más holgado
         'registro': '20/hour',
         'recuperar': '3/hour',   # por cuenta: evita llenar buzones
+        # Por origen. Esta ruta revela si un correo tiene cuenta, así que
+        # el límite es lo único que frena un barrido de direcciones.
+        'existe': '20/min',
     },
     # Detrás del proxy de Render la IP real del cliente llega en
     # X-Forwarded-For. Sin este ajuste DRF usa la cabecera entera, y si la

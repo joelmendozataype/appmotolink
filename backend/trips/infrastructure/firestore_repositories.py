@@ -24,6 +24,23 @@ ESTADOS_DISPONIBLES = [
 ]
 
 
+def _mas_recientes_primero(elementos):
+    """Ordena por fecha de creación, de la más nueva a la más vieja.
+
+    Se ordena aquí y no en la consulta porque combinar un filtro con un
+    `order_by` en Firestore exige declarar un índice compuesto a mano; el
+    resultado es pequeño y ordenarlo en memoria sale más barato.
+
+    Los registros migrados desde SQLite no tienen fecha —aquella base no
+    la guardaba— y se van al final en vez de romper la comparación.
+    """
+    return sorted(
+        elementos,
+        key=lambda e: (e.creado_en is not None, e.creado_en),
+        reverse=True,
+    )
+
+
 class FirestoreSolicitudViajeRepository(SolicitudViajeRepository):
     def __init__(self, store=None, usuario_repo=None):
         self._store_inyectado = store
@@ -93,13 +110,13 @@ class FirestoreSolicitudViajeRepository(SolicitudViajeRepository):
             for doc_id, datos in documentos
         ]
         if not con_pasajero:
-            return solicitudes
+            return _mas_recientes_primero(solicitudes)
         pasajeros = self.usuario_repo.obtener_varios(
             [s.pasajero_id for s in solicitudes],
         )
         for solicitud in solicitudes:
             solicitud.pasajero = pasajeros.get(a_texto_id(solicitud.pasajero_id))
-        return solicitudes
+        return _mas_recientes_primero(solicitudes)
 
     def listar_disponibles(self):
         filtros = [Filtro('estado', 'in', ESTADOS_DISPONIBLES)]
@@ -226,13 +243,7 @@ class FirestoreViajeRepository(ViajeRepository):
             viaje.conductor = conductores.get(a_texto_id(viaje.conductor_id))
 
         # Más recientes primero, que es como se espera leer un historial.
-        # Los viajes migrados desde SQLite no tienen fecha (aquella base no
-        # la guardaba) y quedan al final, en vez de romper la comparación.
-        viajes.sort(
-            key=lambda v: (v.creado_en is not None, v.creado_en),
-            reverse=True,
-        )
-        return viajes
+        return _mas_recientes_primero(viajes)
 
     def listar(self):
         return self._hidratar(self.store.query(VIAJES))

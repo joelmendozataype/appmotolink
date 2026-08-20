@@ -21,10 +21,8 @@ from users.infrastructure.serializers import _validar_contrasena
 
 logger = logging.getLogger('motolink.recuperacion')
 
-MENSAJE_GENERICO = (
-    'Si el correo está registrado, recibirás un código para restablecer '
-    'tu contraseña.'
-)
+MENSAJE_ENVIADO = 'Te enviamos un código para restablecer tu contraseña.'
+NO_REGISTRADO = 'Ese correo no está registrado.'
 
 
 class _RecuperarThrottle(SimpleRateThrottle):
@@ -43,6 +41,21 @@ class _RecuperarThrottle(SimpleRateThrottle):
         return f'throttle_recuperar_{correo}' if correo else None
 
 
+class _ExisteThrottle(SimpleRateThrottle):
+    """Por origen, no por cuenta.
+
+    Esta ruta responde si un correo tiene cuenta, así que sin límite sería
+    una lista de usuarios servida en bandeja: bastaría con recorrer
+    direcciones. El límite no lo impide del todo, pero lo vuelve lento
+    frente a un barrido automático.
+    """
+
+    scope = 'existe'
+
+    def get_cache_key(self, request, view):
+        return f'throttle_existe_{self.get_ident(request)}'
+
+
 class _SolicitudSerializer(serializers.Serializer):
     correo = serializers.EmailField()
 
@@ -56,6 +69,35 @@ class _RestablecerSerializer(serializers.Serializer):
         return _validar_contrasena(valor)
 
 
+def _cuenta_activa(correo):
+    usuario = di.usuario_repo().buscar_por_correo(correo)
+    return usuario if usuario is not None and usuario.is_active else None
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([_ExisteThrottle])
+def existe(request):
+    """Dice si un correo tiene cuenta activa.
+
+    Se añadió a petición expresa: la pantalla de recuperación debe avisar
+    al usuario en vez de dejarlo esperando un correo que nunca llega.
+
+    Tiene un coste conocido y aceptado: permite averiguar qué direcciones
+    están registradas probándolas una a una. Se mitiga con el límite por
+    origen de _ExisteThrottle, pero no desaparece. Si algún día la app
+    deja de ser de uso interno, conviene revisar esta decisión.
+    """
+    datos = _SolicitudSerializer(data={
+        'correo': request.query_params.get('correo', ''),
+    })
+    datos.is_valid(raise_exception=True)
+    return Response({
+        'registrado': _cuenta_activa(datos.validated_data['correo']) is not None,
+    })
+
+
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -63,23 +105,28 @@ class _RestablecerSerializer(serializers.Serializer):
 def recuperar(request):
     """Envía un código de un solo uso al correo indicado.
 
-    Responde lo mismo exista o no la cuenta: si dijera "ese correo no está
-    registrado", cualquiera podría averiguar quién tiene cuenta probando
-    direcciones.
+    Rechaza los correos sin cuenta en vez de callar: es la contrapartida
+    de haber añadido /existe/, que ya revela lo mismo. Mantener aquí la
+    respuesta genérica no protegería nada y solo confundiría al usuario.
     """
     datos = _SolicitudSerializer(data=request.data)
     datos.is_valid(raise_exception=True)
     correo = datos.validated_data['correo']
 
-    usuario = di.usuario_repo().buscar_por_correo(correo)
-    if usuario is not None and usuario.is_active:
-        codigo = generar_codigo()
-        RecuperacionRepository().guardar(
-            correo, CodigoRecuperacion.nuevo(usuario.id, codigo),
+    usuario = _cuenta_activa(correo)
+    if usuario is None:
+        return Response(
+            {'detail': NO_REGISTRADO},
+            status=status.HTTP_404_NOT_FOUND,
         )
-        _enviar(correo, usuario.nombre, codigo)
 
-    return Response({'detail': MENSAJE_GENERICO})
+    codigo = generar_codigo()
+    RecuperacionRepository().guardar(
+        correo, CodigoRecuperacion.nuevo(usuario.id, codigo),
+    )
+    _enviar(correo, usuario.nombre, codigo)
+
+    return Response({'detail': MENSAJE_ENVIADO})
 
 
 def _enviar(correo, nombre, codigo):

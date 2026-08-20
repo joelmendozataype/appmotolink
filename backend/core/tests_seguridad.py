@@ -40,8 +40,8 @@ class SinSesionTests(FirestoreTestCase):
     def test_no_se_puede_crear_una_solicitud(self):
         respuesta = self.anonimo.post(
             '/api/solicitudes-viaje/',
-            {'pasajero': str(self.pasajero.id), 'origen': 'A',
-             'destino': 'B', 'tarifa_propuesta': 5},
+            {'pasajero': str(self.pasajero.id), 'origen': 'Ahuaycha',
+             'destino': 'Pampas', 'tarifa_propuesta': 5},
             format='json',
         )
         self.assertEqual(respuesta.status_code, 403)
@@ -119,7 +119,7 @@ class SuplantacionTests(FirestoreTestCase):
         respuesta = self.cliente_ana.post(
             '/api/solicitudes-viaje/',
             # Ana dice ser Beto: el campo se ignora.
-            {'pasajero': str(self.beto.id), 'origen': 'A', 'destino': 'B',
+            {'pasajero': str(self.beto.id), 'origen': 'Ahuaycha', 'destino': 'Pampas',
              'tarifa_propuesta': 5},
             format='json',
         )
@@ -149,7 +149,7 @@ class SuplantacionTests(FirestoreTestCase):
     def test_un_mototaxista_no_puede_pedir_viajes(self):
         respuesta = self.cliente_carlos.post(
             '/api/solicitudes-viaje/',
-            {'origen': 'A', 'destino': 'B', 'tarifa_propuesta': 5},
+            {'origen': 'Ahuaycha', 'destino': 'Pampas', 'tarifa_propuesta': 5},
             format='json',
         )
         self.assertEqual(respuesta.status_code, 403)
@@ -307,7 +307,7 @@ class RegistroDeRolTests(FirestoreTestCase):
     def _registrar(self, rol, correo):
         return self.anonimo.post(
             '/api/usuarios/',
-            {'nombre': 'X', 'correo': correo,
+            {'nombre': 'Usuario Prueba', 'correo': correo,
              'contrasena': 'MotoLink2026!', 'rol': rol},
             format='json',
         )
@@ -339,7 +339,7 @@ class RegistroDeRolTests(FirestoreTestCase):
         aplicarse también ahí."""
         respuesta = self.anonimo.post(
             '/api/mototaxistas/',
-            {'usuario': {'nombre': 'X', 'correo': 'falso2@motolink.com',
+            {'usuario': {'nombre': 'Usuario Prueba', 'correo': 'falso2@motolink.com',
                          'contrasena': 'MotoLink2026!',
                          'rol': RolUsuario.ADMINISTRADOR},
              'licencia': 'L', 'placa': 'P', 'marca_vehiculo': 'M',

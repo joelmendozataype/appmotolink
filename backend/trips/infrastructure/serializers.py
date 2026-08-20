@@ -7,7 +7,21 @@ conecta con los campos `*_id` de las entidades.
 from rest_framework import serializers
 
 from trips.domain.entities import EstadoSolicitud, EstadoViaje
+from trips.domain.validaciones import (
+    LugarInvalidoError,
+    TarifaInvalidaError,
+    validar_lugar,
+    validar_tarifa,
+)
 from users.infrastructure.serializers import MototaxistaSerializer, UsuarioSerializer
+
+
+def _validar_lugar(valor, campo):
+    """Traduce la regla del dominio al error que entiende DRF."""
+    try:
+        return validar_lugar(valor, campo)
+    except LugarInvalidoError as error:
+        raise serializers.ValidationError(str(error))
 
 
 class SolicitudViajeSerializer(serializers.Serializer):
@@ -27,6 +41,18 @@ class SolicitudViajeSerializer(serializers.Serializer):
     # si esa solicitud ya la respondió. Sin esto, todas se veían iguales y
     # al pulsar recibía un 409 "Ya respondiste a esta solicitud".
     ya_respondida = serializers.SerializerMethodField()
+
+    def validate_tarifa_propuesta(self, valor):
+        try:
+            return validar_tarifa(valor)
+        except TarifaInvalidaError as error:
+            raise serializers.ValidationError(str(error))
+
+    def validate_origen(self, valor):
+        return _validar_lugar(valor, 'el origen')
+
+    def validate_destino(self, valor):
+        return _validar_lugar(valor, 'el destino')
 
     def get_ya_respondida(self, solicitud):
         respondidas = self.context.get('respondidas')

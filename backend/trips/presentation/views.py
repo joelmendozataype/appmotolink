@@ -34,6 +34,7 @@ from trips.domain.repositories import (
     SolicitudNoEncontradaError,
     ViajeNoEncontradoError,
 )
+from trips.domain.validaciones import TarifaInvalidaError, validar_tarifa
 from trips.infrastructure.serializers import SolicitudViajeSerializer, ViajeSerializer
 from users.domain.entities import RolUsuario
 from users.domain.repositories import MototaxistaNoEncontradoError
@@ -183,10 +184,20 @@ class SolicitudViajeViewSet(ViewSet):
 
     @action(detail=True, methods=['post'])
     def contraofertar(self, request, pk=None):
-        """4b. El conductor propone una tarifa distinta."""
+        """4b. El conductor propone una tarifa distinta.
+
+        La tarifa se valida aquí porque esta ruta no pasa por ningún
+        serializer: el valor se leía directo del cuerpo, así que hasta un
+        importe negativo se habría guardado.
+        """
+        try:
+            tarifa = validar_tarifa(request.data.get('tarifa'))
+        except TarifaInvalidaError as error:
+            return Response(
+                {'tarifa': [str(error)]}, status=status.HTTP_400_BAD_REQUEST,
+            )
         return self._responder(
-            request, pk, NegotiationService().contraofertar,
-            tarifa=request.data.get('tarifa'),
+            request, pk, NegotiationService().contraofertar, tarifa=tarifa,
         )
 
     @action(detail=True, methods=['post'])

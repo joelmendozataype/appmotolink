@@ -11,11 +11,18 @@ historial del terminal.
 """
 from getpass import getpass
 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management.base import BaseCommand, CommandError
 
 from core import di
 from users.domain.entities import RolUsuario, Usuario
 from users.domain.repositories import CorreoDuplicadoError
+from users.domain.validaciones import (
+    DatoInvalidoError,
+    validar_correo,
+    validar_nombre,
+)
 
 
 class Command(BaseCommand):
@@ -29,7 +36,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opciones):
-        correo = opciones['correo'].strip()
+        # Se valida antes de pedir la contraseña: si el correo está mal
+        # escrito, es una tontería hacer teclearla dos veces para nada.
+        # Son las mismas reglas que aplica el registro de pasajeros y
+        # mototaxistas; el administrador no es una excepción.
+        try:
+            correo = validar_correo(opciones['correo'])
+            nombre = validar_nombre(opciones['nombre'])
+        except DatoInvalidoError as error:
+            raise CommandError(str(error)) from error
+
         repo = di.usuario_repo()
         usuario = repo.buscar_por_correo(correo)
 
@@ -48,12 +64,16 @@ class Command(BaseCommand):
         contrasena = getpass('Contraseña para el nuevo administrador: ')
         if contrasena != getpass('Repite la contraseña: '):
             raise CommandError('Las contraseñas no coinciden.')
-        if len(contrasena) < 8:
-            raise CommandError('Usa al menos 8 caracteres.')
+        # Los mismos validadores que el registro público, en vez de un
+        # mínimo de 8 caracteres a mano: antes esta vía admitía
+        # contraseñas que la API habría rechazado.
+        try:
+            validate_password(contrasena)
+        except DjangoValidationError as error:
+            raise CommandError(' '.join(error.messages)) from error
 
         nuevo = Usuario(
-            nombre=opciones['nombre'], correo=correo,
-            rol=RolUsuario.ADMINISTRADOR,
+            nombre=nombre, correo=correo, rol=RolUsuario.ADMINISTRADOR,
         )
         nuevo.set_password(contrasena)
         try:

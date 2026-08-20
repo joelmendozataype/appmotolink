@@ -11,8 +11,21 @@ from rest_framework import serializers
 from core import di
 from users.domain.entities import Mototaxista, RolUsuario, Usuario
 from users.domain.repositories import CorreoDuplicadoError
+from users.domain.validaciones import DatoInvalidoError, validar_nombre
 
 CORREO_DUPLICADO = 'Ya existe un usuario con este correo.'
+
+
+def _validar_nombre(valor):
+    """Traduce la regla del dominio al error que entiende DRF.
+
+    La regla no vive aquí a propósito: la comparten esta ruta y el comando
+    que crea administradores. Ver users/domain/validaciones.py.
+    """
+    try:
+        return validar_nombre(valor)
+    except DatoInvalidoError as error:
+        raise serializers.ValidationError(str(error))
 
 
 def _validar_contrasena(valor):
@@ -34,6 +47,9 @@ class UsuarioSerializer(serializers.Serializer):
     correo = serializers.EmailField()
     contrasena = serializers.CharField(max_length=255, write_only=True)
     rol = serializers.ChoiceField(choices=RolUsuario.valores())
+
+    def validate_nombre(self, valor):
+        return _validar_nombre(valor)
 
     def validate_contrasena(self, valor):
         return _validar_contrasena(valor)
